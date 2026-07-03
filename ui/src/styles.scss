@@ -1,10 +1,26 @@
-$text: #18201e;
-$muted: #62706b;
-$border: #d7ded9;
-$surface: #ffffff;
-$page: #f3f5f2;
-$primary: #245b4b;
-$primary-text: #ffffff;
+$text: var(--text);
+$text-strong: var(--text-strong);
+$text-soft: var(--text-soft);
+$muted: var(--muted);
+$muted-2: var(--muted-2);
+$border: var(--border);
+$border-soft: var(--border-soft);
+$surface: var(--surface);
+$surface-muted: var(--surface-muted);
+$surface-subtle: var(--surface-subtle);
+$page: var(--page);
+$primary: var(--primary);
+$primary-text: var(--primary-text);
+$primary-soft: var(--primary-soft);
+$primary-softer: var(--primary-softer);
+$primary-selected: var(--primary-selected);
+$primary-hover: var(--primary-hover);
+$primary-active: var(--primary-active);
+$success-border: var(--success-border);
+$danger: var(--danger);
+$danger-bg: var(--danger-bg);
+$danger-soft: var(--danger-soft);
+$warning: var(--warning);
 
 html,
 body,
@@ -13,12 +29,75 @@ body,
 }
 
 :root {
+  --text: #18201e;
+  --text-strong: #293630;
+  --text-soft: #3f4c47;
+  --muted: #62706b;
+  --muted-2: #697772;
+  --border: #d7ded9;
+  --border-soft: #e0e6e2;
+  --surface: #ffffff;
+  --surface-muted: #fbfcfb;
+  --surface-subtle: #f1f5f2;
+  --page: #f3f5f2;
+  --primary: #245b4b;
+  --primary-text: #ffffff;
+  --primary-soft: #dfe8e3;
+  --primary-softer: #e8eee9;
+  --primary-selected: #e7f0eb;
+  --primary-hover: #f4f8f5;
+  --primary-active: #f1f7f3;
+  --success-border: #b7d9cb;
+  --danger: #9b2c2c;
+  --danger-bg: #fffafa;
+  --danger-soft: #f8dddd;
+  --warning: #a56a20;
+  --warning-soft: #d9ad68;
+  --danger-border-soft: #efb3b3;
+  --danger-gradient-soft: #e08c8c;
+  --dialog-backdrop: rgba(12, 18, 16, 0.42);
+  --dialog-shadow-strong: rgba(12, 18, 16, 0.22);
+  --dialog-shadow-soft: rgba(12, 18, 16, 0.12);
   color: $text;
   background: $page;
+  color-scheme: light;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   line-height: 1.5;
+}
+
+:root[data-theme="dark"] {
+  --text: #ecf3ef;
+  --text-strong: #f5faf7;
+  --text-soft: #c8d5cf;
+  --muted: #9fb0a9;
+  --muted-2: #96a7a0;
+  --border: #394841;
+  --border-soft: #2f3e37;
+  --surface: #17221d;
+  --surface-muted: #1d2a24;
+  --surface-subtle: #22332b;
+  --page: #101815;
+  --primary: #7fc1a8;
+  --primary-text: #0b1712;
+  --primary-soft: #263c33;
+  --primary-softer: #20342c;
+  --primary-selected: #27483b;
+  --primary-hover: #22372f;
+  --primary-active: #28473b;
+  --success-border: #4b8f76;
+  --danger: #ff9f9f;
+  --danger-bg: #321f22;
+  --danger-soft: #4a292c;
+  --warning: #e0b56f;
+  --warning-soft: #8a6331;
+  --danger-border-soft: #8a4a4e;
+  --danger-gradient-soft: #a35e62;
+  --dialog-backdrop: rgba(3, 7, 5, 0.66);
+  --dialog-shadow-strong: rgba(0, 0, 0, 0.42);
+  --dialog-shadow-soft: rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
 }
 
 * {
@@ -54,21 +133,33 @@ button {
   }
 }
 
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: opacity 150ms ease;
+}
+
+.stack-page {
+  min-height: 100vh;
+}
+
 .shell {
   display: flex;
   flex-direction: column;
   gap: 10px;
   height: 100vh;
   overflow: hidden;
-  padding: 18px 28px 28px;
+  padding: 18px clamp(28px, 3vw, 56px) 28px;
 }
 
 .topbar,
 .workspace,
 .details,
 .page-panel {
-  width: min(1180px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 .topbar {
@@ -109,8 +200,8 @@ h2 {
 
 .ghost {
   padding: 10px 14px;
-  color: #24443b;
-  background: #dfe8e3;
+  color: $text-soft;
+  background: $primary-soft;
 
   &.active {
     color: $primary-text;
@@ -134,12 +225,12 @@ h2 {
   }
 
   span {
-    color: #697772;
+    color: $muted-2;
     font-size: 14px;
   }
 
   &.ready {
-    border-color: #b7d9cb;
+    border-color: $success-border;
   }
 
   button {
@@ -159,12 +250,13 @@ h2 {
   display: grid;
   grid-template-columns: 360px 1fr;
   gap: 18px;
+  flex: 1;
   min-height: 470px;
   min-width: 0;
 }
 
 .main-workspace {
-  min-height: 620px;
+  min-height: 0;
 
   &.with-result-preview {
     width: 100%;
@@ -204,7 +296,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: #5a6762;
+  color: $muted;
   font-size: 13px;
   font-weight: 700;
 }
@@ -216,15 +308,15 @@ h2 {
 
   button {
     padding: 0 14px;
-    color: #24443b;
-    background: #e8eee9;
+    color: $text-soft;
+    background: $primary-softer;
   }
 }
 
 .file-picker {
   min-height: 48px;
-  color: #24443b;
-  background: #e8eee9;
+  color: $text-soft;
+  background: $primary-softer;
 }
 
 .picker-actions {
@@ -238,28 +330,28 @@ select {
   width: 100%;
   min-height: 42px;
   padding: 9px 10px;
-  border: 1px solid #cfd8d2;
+  border: 1px solid $border;
   border-radius: 7px;
-  background: #fbfcfb;
+  background: $surface-muted;
   color: $text;
 }
 
 .segmented-control {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(var(--segmented-options, 2), minmax(0, 1fr));
   gap: 4px;
   width: 100%;
   min-height: 42px;
   padding: 4px;
-  border: 1px solid #cfd8d2;
+  border: 1px solid $border;
   border-radius: 7px;
-  background: #fbfcfb;
+  background: $surface-muted;
 
   button {
     min-height: 32px;
     padding: 0 10px;
     border-radius: 5px;
-    color: #4e5e58;
+    color: $text-soft;
     background: transparent;
     font-size: 14px;
     font-weight: 800;
@@ -286,7 +378,7 @@ select {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #35443f;
+  color: $text-soft;
   font-weight: 700;
 
   input {
@@ -306,8 +398,8 @@ select {
   margin-top: auto;
   padding: 12px;
   border-radius: 8px;
-  color: #5d6a65;
-  background: #f1f5f2;
+  color: $muted;
+  background: $surface-subtle;
   font-size: 13px;
 }
 
@@ -318,13 +410,13 @@ select {
   margin-top: auto;
   padding: 12px;
   border-radius: 8px;
-  color: #5d6a65;
-  background: #f1f5f2;
+  color: $muted;
+  background: $surface-subtle;
   font-size: 13px;
 
   strong {
     overflow-wrap: anywhere;
-    color: #293630;
+    color: $text-strong;
     font-size: 14px;
   }
 }
@@ -334,14 +426,14 @@ select {
   flex-direction: column;
   gap: 10px;
   flex: 1;
-  min-height: 360px;
+  min-height: 0;
 }
 
 .list-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #35443f;
+  color: $text-soft;
   font-size: 13px;
 }
 
@@ -356,10 +448,10 @@ select {
 .empty-result {
   margin: 0;
   padding: 14px;
-  border: 1px dashed #cfd8d2;
+  border: 1px dashed $border;
   border-radius: 8px;
-  color: #697772;
-  background: #fbfcfb;
+  color: $muted-2;
+  background: $surface-muted;
   font-size: 13px;
 }
 
@@ -367,7 +459,7 @@ select {
   flex: 1;
   display: grid;
   place-items: center;
-  min-height: 360px;
+  min-height: 0;
 }
 
 .file-list,
@@ -391,9 +483,9 @@ select {
     gap: 10px;
     align-items: center;
     padding: 10px;
-    border: 1px solid #e0e6e2;
+    border: 1px solid $border-soft;
     border-radius: 8px;
-    background: #fbfcfb;
+    background: $surface-muted;
   }
 
   strong,
@@ -408,7 +500,7 @@ select {
   }
 
   span {
-    color: #697772;
+    color: $muted-2;
     font-size: 12px;
   }
 }
@@ -425,10 +517,10 @@ select {
   align-items: center;
   justify-content: space-between;
   padding: 18px;
-  border-bottom: 1px solid #e0e6e2;
+  border-bottom: 1px solid $border-soft;
 
   span {
-    color: #697772;
+    color: $muted-2;
     font-size: 13px;
   }
 }
@@ -467,22 +559,22 @@ textarea {
     align-items: start;
     min-width: 0;
     padding: 14px;
-    border: 1px solid #e0e6e2;
+    border: 1px solid $border-soft;
     border-radius: 8px;
-    background: #fbfcfb;
+    background: $surface-muted;
     cursor: pointer;
 
     &:hover {
-      background: #f4f8f5;
+      background: $primary-hover;
     }
 
     &.active {
       border-color: $primary;
-      background: #f1f7f3;
+      background: $primary-active;
     }
 
     &.success {
-      border-color: #b7d9cb;
+      border-color: $success-border;
 
       &.active {
         border-color: $primary;
@@ -490,8 +582,8 @@ textarea {
     }
 
     &.error {
-      border-color: #efb3b3;
-      background: #fffafa;
+      border-color: var(--danger-border-soft);
+      background: $danger-bg;
     }
   }
 
@@ -499,13 +591,13 @@ textarea {
     padding: 4px 8px;
     border-radius: 999px;
     color: $primary;
-    background: #e4eee8;
+    background: $primary-soft;
     font-size: 12px;
   }
 
   .error b {
-    color: #9b2c2c;
-    background: #f8dddd;
+    color: $danger;
+    background: $danger-soft;
   }
 }
 
@@ -538,13 +630,13 @@ textarea {
 
   span {
     margin-top: 4px;
-    color: #697772;
+    color: $muted-2;
     font-size: 12px;
   }
 
   small {
     margin-top: 8px;
-    color: #3f4c47;
+    color: $text-soft;
     font-size: 12px;
   }
 }
@@ -554,7 +646,7 @@ textarea {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid #e0e6e2;
+  border: 1px solid $border-soft;
   border-radius: 8px;
   background: $surface;
 }
@@ -565,7 +657,7 @@ textarea {
   gap: 12px;
   align-items: start;
   padding: 18px;
-  border-bottom: 1px solid #e0e6e2;
+  border-bottom: 1px solid $border-soft;
 
   strong {
     display: block;
@@ -582,14 +674,14 @@ textarea {
   height: 30px;
   padding: 0;
   border-radius: 999px;
-  color: #52635d;
-  background: #edf3ef;
+  color: $muted;
+  background: $primary-soft;
   font-size: 20px;
   line-height: 1;
 
   &:hover {
     color: $primary;
-    background: #dfe9e4;
+    background: $primary-selected;
   }
 }
 
@@ -598,8 +690,8 @@ textarea {
   max-height: none;
   min-height: 0;
   padding: 14px;
-  color: #22312c;
-  background: #ffffff;
+  color: $text;
+  background: $surface;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.6;
@@ -610,12 +702,12 @@ textarea {
 .preview-note {
   margin: 0;
   padding: 12px 14px;
-  color: #697772;
+  color: $muted-2;
   font-size: 12px;
 }
 
 .preview-error {
-  color: #9b2c2c;
+  color: $danger;
 }
 
 .details {
@@ -631,7 +723,7 @@ textarea {
 
   span {
     overflow-wrap: anywhere;
-    color: #697772;
+    color: $muted-2;
     font-size: 13px;
   }
 }
@@ -640,7 +732,7 @@ pre {
   overflow: auto;
   max-height: 120px;
   margin: 0;
-  color: #3f4c47;
+  color: $text-soft;
   white-space: pre-wrap;
 }
 
@@ -658,9 +750,9 @@ pre.preview-content {
   > div {
     min-width: 0;
     padding: 14px;
-    border: 1px solid #e0e6e2;
+    border: 1px solid $border-soft;
     border-radius: 8px;
-    background: #fbfcfb;
+    background: $surface-muted;
   }
 
   span,
@@ -669,7 +761,7 @@ pre.preview-content {
   }
 
   span {
-    color: #697772;
+    color: $muted-2;
     font-size: 13px;
     font-weight: 700;
   }
@@ -704,7 +796,7 @@ pre.preview-content {
   }
 
   span {
-    color: #697772;
+    color: $muted-2;
     font-size: 13px;
   }
 }
@@ -722,12 +814,12 @@ pre.preview-content {
   align-items: center;
   min-height: 76px;
   padding: 14px;
-  border: 1px solid #e0e6e2;
+  border: 1px solid $border-soft;
   border-radius: 8px;
-  background: #fbfcfb;
+  background: $surface-muted;
 
   &.installed {
-    border-color: #b7d9cb;
+    border-color: $success-border;
   }
 
   strong,
@@ -744,15 +836,15 @@ pre.preview-content {
 
   span,
   small {
-    color: #697772;
+    color: $muted-2;
     font-size: 12px;
   }
 
   b {
     padding: 4px 8px;
     border-radius: 999px;
-    color: #697772;
-    background: #edf2ee;
+    color: $muted-2;
+    background: $primary-soft;
     font-size: 12px;
   }
 }
@@ -761,9 +853,9 @@ pre.preview-content {
   flex: 1;
   max-height: none;
   padding: 14px;
-  border: 1px solid #e0e6e2;
+  border: 1px solid $border-soft;
   border-radius: 8px;
-  background: #fbfcfb;
+  background: $surface-muted;
 }
 
 .settings-shell .settings-panel {
@@ -790,15 +882,15 @@ pre.preview-content {
   width: 100%;
   min-height: 68px;
   padding: 12px;
-  border: 1px solid #e0e6e2;
+  border: 1px solid $border-soft;
   border-radius: 8px;
-  color: #3d4c46;
-  background: #fbfcfb;
+  color: $text-soft;
+  background: $surface-muted;
   text-align: left;
 
   &.active {
-    border-color: #b7d9cb;
-    background: #e7f0eb;
+    border-color: $success-border;
+    background: $primary-selected;
   }
 
   strong,
@@ -812,7 +904,7 @@ pre.preview-content {
 
   span {
     margin-top: 4px;
-    color: #697772;
+    color: $muted-2;
     font-size: 12px;
     font-weight: 600;
   }
@@ -834,9 +926,9 @@ pre.preview-content {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid #e0e6e2;
+  border: 1px solid $border-soft;
   border-radius: 8px;
-  background: #fbfcfb;
+  background: $surface-muted;
 }
 
 .setting-row {
@@ -846,7 +938,7 @@ pre.preview-content {
   align-items: center;
   min-height: 86px;
   padding: 16px 18px;
-  border-bottom: 1px solid #e0e6e2;
+  border-bottom: 1px solid $border-soft;
 
   &:last-child {
     border-bottom: 0;
@@ -868,7 +960,7 @@ pre.preview-content {
 
   span {
     margin-top: 4px;
-    color: #697772;
+    color: $muted-2;
     font-size: 12px;
     font-weight: 600;
   }
@@ -896,7 +988,7 @@ pre.preview-content {
 
   span {
     margin-top: 4px;
-    color: #697772;
+    color: $muted-2;
     font-size: 13px;
   }
 }
@@ -921,7 +1013,7 @@ pre.preview-content {
   width: 100%;
   height: 100%;
   border-radius: 0;
-  background: rgba(12, 18, 16, 0.42);
+  background: var(--dialog-backdrop);
   cursor: default;
 }
 
@@ -930,12 +1022,12 @@ pre.preview-content {
   z-index: 1;
   width: min(420px, 100%);
   padding: 20px;
-  border: 1px solid #d6ded9;
+  border: 1px solid $border;
   border-radius: 8px;
   background: $surface;
   box-shadow:
-    0 22px 60px rgba(12, 18, 16, 0.22),
-    0 6px 18px rgba(12, 18, 16, 0.12);
+    0 22px 60px var(--dialog-shadow-strong),
+    0 6px 18px var(--dialog-shadow-soft);
 }
 
 .confirm-dialog-head {
@@ -950,7 +1042,7 @@ pre.preview-content {
 
   p {
     margin: 8px 0 0;
-    color: #62706b;
+    color: $muted;
     font-size: 14px;
   }
 }
@@ -958,11 +1050,11 @@ pre.preview-content {
 .confirm-dialog-icon {
   width: 32px;
   height: 32px;
-  border: 1px solid #d7ded9;
+  border: 1px solid $border;
   border-radius: 999px;
   background:
     linear-gradient($surface, $surface) padding-box,
-    linear-gradient(135deg, #245b4b, #7ba998) border-box;
+    linear-gradient(135deg, $primary, var(--success-border)) border-box;
 
   &::after {
     display: block;
@@ -978,20 +1070,20 @@ pre.preview-content {
 .confirm-dialog.warning .confirm-dialog-icon {
   background:
     linear-gradient($surface, $surface) padding-box,
-    linear-gradient(135deg, #a56a20, #d9ad68) border-box;
+    linear-gradient(135deg, $warning, var(--warning-soft)) border-box;
 
   &::after {
-    background: #a56a20;
+    background: $warning;
   }
 }
 
 .confirm-dialog.danger .confirm-dialog-icon {
   background:
     linear-gradient($surface, $surface) padding-box,
-    linear-gradient(135deg, #9b2c2c, #e08c8c) border-box;
+    linear-gradient(135deg, $danger, var(--danger-gradient-soft)) border-box;
 
   &::after {
-    background: #9b2c2c;
+    background: $danger;
   }
 }
 

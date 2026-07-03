@@ -34,7 +34,11 @@ Tauri desktop
 
 Python 核心不直接依赖 Tauri，当前保留为 CLI、测试和 PaddleOCR 扩展迁移基础。桌面基础 OCR 已切换为 `moshi-ocr-native`，通过 Swift/PDFKit/CoreGraphics/Vision 完成图片、PDF 文本层和扫描页识别。
 
-前端层按「基础 UI」和「业务组件」拆分。`components/ui` 只沉淀按钮、卡片、字段、开关、分段控制、空状态和应用内确认弹框等无业务语义组件；`components/features` 按 OCR、后端依赖、系统设置等功能组织业务视图；`App.tsx` 保持为状态和命令编排层，避免继续承载大段页面结构。识别结果的预览状态留在 OCR 业务组件内，Tauri 命令只负责读取文本结果、系统打开和文件定位，不反向耦合 OCR 进程调用。
+前端层按「基础 UI」和「业务组件」拆分。`components/ui` 只沉淀按钮、卡片、字段、开关、分段控制、空状态和应用内确认弹框等无业务语义组件；`components/features` 按 OCR、后端依赖、系统设置等功能组织业务视图；`App.tsx` 保持为状态和命令编排层，避免继续承载大段页面结构。识别结果的预览状态留在 OCR 业务组件内，Tauri 命令只负责读取文本结果、系统打开和文件定位，不反向耦合 OCR 进程调用。前端样式入口统一为 `ui/src/styles.scss`，不再使用 UnoCSS 或原子类生成插件。
+
+桌面外层 `.shell` 负责窗口 padding 和纵向高度，页面主内容使用 `width: 100%` 跟随窗口展开；识别页 `.main-workspace` 作为 flex 子项撑满剩余高度，卡片内部通过 `min-height: 0` 把滚动限制在列表或预览内容区。
+
+界面主题由 `ui/src/lib/theme.ts` 统一管理，设置项保存 `system`、`light` 或 `dark` 偏好。选择 `system` 时监听浏览器的 `prefers-color-scheme`，并把解析后的主题写到根节点 `data-theme`；组件样式通过 `ui/src/styles.scss` 中的 CSS 语义变量取色，避免业务组件直接维护深浅色分支。
 
 目标架构是 Apple Vision 内置默认可用，PaddleOCR 及其他引擎通过扩展包引入。完整方案见 [native-backend-extension-refactor.md](native-backend-extension-refactor.md)。
 
@@ -56,5 +60,6 @@ input/              本地临时输入，不提交
 - 新桌面命令先在 `commands.rs` 定义 DTO 和命令，再把具体执行逻辑放到领域模块。
 - 输出文件预览只读取 `txt/json` 等文本产物，列表和预览列只展示输出文件名，不展示完整路径；预览列默认关闭，由用户点击结果行或「预览」打开，预览头部只保留关闭图标；打开和定位由列表行命令调用系统能力完成。
 - 新前端通用样式或交互优先沉淀到 `ui/src/components/ui/`；和 OCR、后端、设置等业务强绑定的结构放到 `ui/src/components/features/`。
+- 新增或调整界面颜色时优先扩展 `ui/src/styles.scss` 的主题变量，保持浅色、深色和跟随系统模式使用同一套组件结构。
 - 新确认类交互优先复用 `ui/src/components/ui/useConfirmDialog.tsx` 和 `ConfirmDialog.tsx`，保持应用内系统风格，不直接使用浏览器或系统默认 confirm。
 - 不把 `.venv/`、`.uv-cache/`、`.paddlex-cache/`、`node_modules/`、`dist/`、`src-tauri/target/` 放进仓库。

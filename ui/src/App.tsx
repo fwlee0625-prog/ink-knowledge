@@ -6,6 +6,7 @@ import { SettingsPage } from "./components/features/settings/SettingsPage";
 import { AppButton, useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
 import { fallbackSettings, readSavedSettings, settingsKey } from "./lib/settings";
+import { useThemeMode } from "./lib/theme";
 import type {
   AppSettings,
   BackendStatus,
@@ -28,6 +29,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState("");
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
+  const resolvedTheme = useThemeMode(settings.themePreference);
 
   const runBusy = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
@@ -45,6 +47,7 @@ export function App() {
     const baseSettings: AppSettings = {
       outputDir: defaults.output_dir,
       ocrEngine: defaults.ocr_engine,
+      themePreference: fallbackSettings.themePreference,
       dpi: defaults.dpi,
       lang: defaults.lang,
       forceOcr: defaults.force_ocr,
@@ -342,6 +345,7 @@ export function App() {
           onSaveSettings={saveSettings}
           onUninstallExtension={uninstallExtension}
           onUpdateSettings={setSettings}
+          resolvedTheme={resolvedTheme}
           settings={settings}
           status={status}
         />

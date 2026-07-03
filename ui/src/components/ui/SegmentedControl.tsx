@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { AppButton } from "./AppButton";
 
 type SegmentedOption<TValue extends string> = {
@@ -18,8 +19,10 @@ export function SegmentedControl<TValue extends string>({
   options,
   value,
 }: SegmentedControlProps<TValue>) {
+  const style = { "--segmented-options": options.length } as CSSProperties;
+
   return (
-    <div className="segmented-control">
+    <div className="segmented-control" style={style}>
       {options.map((option) => (
         <AppButton
           active={value === option.value}

@@ -13,6 +13,7 @@
 - JSON 保留 `page`、`text`、`score`、`box`、`polygon`、`source`
 - 桌面版默认使用内置 `moshi-ocr-native` 做 Apple Vision 本机识别
 - 桌面版识别完成后可在应用内预览 `txt/json` 结果，也可用系统默认应用打开或在 Finder 中定位
+- 桌面版支持浅色、深色和跟随系统主题，系统外观变化时可自动切换
 - PaddleOCR 作为扩展高精度引擎引入，未安装扩展时不会下载 PaddleOCR 或模型
 - 可切换 OCR 引擎，后续可继续接入其他识别后端
 
@@ -118,7 +119,11 @@ Tauri 前端
 ~/Library/Application Support/com.local.mac-ocr/engines/{engine}/{version}/
 ```
 
-前端采用 React 组件分层：`ui/src/components/ui/` 放可复用基础组件，如按钮、卡片、字段、分段控制、开关、空状态和应用内确认弹框；`ui/src/components/features/` 按功能拆分 OCR 识别、后端状态、系统设置等业务组件；`ui/src/App.tsx` 只保留全局状态、Tauri 命令调用和页面切换。确认类交互优先使用 `useConfirmDialog` + `ConfirmDialog`，避免回退到系统默认弹窗导致视觉风格不统一。
+前端采用 React 组件分层：`ui/src/components/ui/` 放可复用基础组件，如按钮、卡片、字段、分段控制、开关、空状态和应用内确认弹框；`ui/src/components/features/` 按功能拆分 OCR 识别、后端状态、系统设置等业务组件；`ui/src/App.tsx` 只保留全局状态、Tauri 命令调用和页面切换。确认类交互优先使用 `useConfirmDialog` + `ConfirmDialog`，避免回退到系统默认弹窗导致视觉风格不统一。前端样式统一由 `ui/src/styles.scss` 维护，不再引入 UnoCSS。
+
+桌面主布局由外层窗口 padding 控制边距，识别页和设置页内容随窗口宽度展开；识别页会撑满顶部导航下方的剩余高度。
+
+系统设置的「基础设置」里可以切换界面主题：浅色、深色或跟随系统。主题偏好写入本地设置；选择跟随系统时，前端监听 `prefers-color-scheme` 并在系统外观变化后自动应用对应主题。
 
 识别页的结果区优先展示输出文件名，不在列表和预览列展示完整路径。预览列默认关闭，用户点击结果行或行内「预览」后，前端通过 `preview_result_file` 读取 `txt/json` 并在右侧单独展示；预览列右上角仅保留关闭图标按钮；行内的「打开」调用系统默认应用，「定位」在 Finder 中选中输出文件。
 

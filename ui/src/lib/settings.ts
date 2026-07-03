@@ -6,6 +6,7 @@ export const settingsKey = "mac-local-ocr.settings";
 export const fallbackSettings: AppSettings = {
   outputDir: "",
   ocrEngine: "apple-vision",
+  themePreference: "system",
   dpi: 300,
   lang: "ch",
   forceOcr: false,
@@ -23,6 +24,13 @@ export function readSavedSettings(): Partial<AppSettings> {
     }
     if (saved.ocrEngine !== "paddle" && saved.ocrEngine !== "apple-vision") {
       saved.ocrEngine = "apple-vision";
+    }
+    if (
+      saved.themePreference !== "system" &&
+      saved.themePreference !== "light" &&
+      saved.themePreference !== "dark"
+    ) {
+      saved.themePreference = "system";
     }
     if (typeof saved.recursionDepth === "number") {
       saved.recursionDepth = clampNumber(saved.recursionDepth, 1, 5);

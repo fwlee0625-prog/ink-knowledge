@@ -48,9 +48,12 @@ export type ResultPreview = {
 
 export type OcrEngine = "paddle" | "apple-vision";
 
+export type ThemePreference = "system" | "light" | "dark";
+
 export type AppSettings = {
   outputDir: string;
   ocrEngine: OcrEngine;
+  themePreference: ThemePreference;
   dpi: number;
   lang: string;
   forceOcr: boolean;

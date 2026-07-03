@@ -2,7 +2,8 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useState } from "react";
 import { AppButton, Card, SegmentedControl, Toggle } from "../../ui";
 import { clampNumber } from "../../../lib/format";
-import type { AppSettings, BackendStatus, ExtensionInfo, OcrEngine } from "../../../types";
+import type { AppSettings, BackendStatus, ExtensionInfo, OcrEngine, ThemePreference } from "../../../types";
+import type { ResolvedTheme } from "../../../lib/theme";
 
 type SettingsSection = "general" | "recognition" | "extensions" | "backend";
 
@@ -19,11 +20,18 @@ type SettingsPageProps = {
   onSaveSettings: () => void;
   onUninstallExtension: (id: string, name: string) => Promise<void>;
   onUpdateSettings: Dispatch<SetStateAction<AppSettings>>;
+  resolvedTheme: ResolvedTheme;
 };
 
 const engineOptions: Array<{ label: string; value: OcrEngine }> = [
   { label: "Apple Vision", value: "apple-vision" },
   { label: "PaddleOCR 扩展", value: "paddle" },
+];
+
+const themeOptions: Array<{ label: string; value: ThemePreference }> = [
+  { label: "跟随系统", value: "system" },
+  { label: "浅色", value: "light" },
+  { label: "深色", value: "dark" },
 ];
 
 const sections: Array<{ id: SettingsSection; label: string; description: string }> = [
@@ -46,6 +54,7 @@ export function SettingsPage({
   onSaveSettings,
   onUninstallExtension,
   onUpdateSettings,
+  resolvedTheme,
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
 
@@ -83,6 +92,17 @@ export function SettingsPage({
                   />
                   <AppButton onClick={onChooseOutputDir}>选择</AppButton>
                 </div>
+              </SettingRow>
+
+              <SettingRow
+                description={`当前实际使用${resolvedTheme === "dark" ? "深色" : "浅色"}界面。`}
+                label="界面主题"
+              >
+                <SegmentedControl
+                  onChange={(themePreference) => onUpdateSettings((current) => ({ ...current, themePreference }))}
+                  options={themeOptions}
+                  value={settings.themePreference}
+                />
               </SettingRow>
 
               <SettingRow description="至少保留一种输出格式。" label="输出格式">
