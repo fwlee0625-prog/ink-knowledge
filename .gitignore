@@ -1,0 +1,17 @@
+.venv/
+.uv-cache/
+.paddlex-cache/
+.pnpm-store/
+.swift-module-cache/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+input/
+output/
+samples/
+node_modules/
+dist/
+src-tauri/target/
+build/
+*.egg-info/
