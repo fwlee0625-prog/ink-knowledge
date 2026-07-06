@@ -32,7 +32,7 @@ Tauri desktop
     src/lib/                    前端纯工具函数和本地设置持久化
   src-tauri/src/
     main.rs         Tauri 启动装配
-    commands.rs     前端可调用命令和 DTO，包括结果预览、截图、翻译、剪贴板和取色
+    commands.rs     前端可调用命令和 DTO，包括结果预览、截图、翻译和剪贴板
     backend.rs      原生后端检测、扩展后端发现、OCR 进程调用
     screenshot.rs   截图保存、复制到剪贴板和输出目录工具
     native_capture.rs Swift 原生截图 helper 启动、结果解析和截图 OCR 编排
@@ -41,9 +41,8 @@ Tauri desktop
     translation.rs  多引擎翻译分发，包含 OpenAI 兼容 Chat Completions 请求和火山翻译 AK/SK 签名请求
     clipboard.rs    系统剪贴板文本读写（pbpaste/pbcopy）
     clipboard_repo.rs  剪贴板历史 SQLite 持久化（rusqlite，WAL 模式），建表、去重、容量裁剪、置顶和源文件失效检测
-    settings_repo.rs  系统设置和最近取色历史 SQLite 持久化，按 key 保存 JSON，便于前端字段演进
+    settings_repo.rs  系统设置 SQLite 持久化，按 key 保存 JSON，便于前端字段演进
     native_pasteboard.rs  NSPasteboard 轮询编排，调用 Swift helper、敏感内容过滤、变更事件 emit
-    color_picker.rs 屏幕取色和颜色格式转换
     tray.rs          macOS 菜单栏图标、下拉菜单和窗口唤起事件；菜单项 ID 与 shortcut action ID 共用，菜单点击和全局快捷键走同一 `dispatch_action` 分发路径
     shortcuts.rs    全局快捷键绑定（ShortcutBindings）、加速器校验和注册逻辑；`register_all` 会先注销已有快捷键再注册新绑定，并调用 `tray::rebuild_menu` 让菜单项右侧提示同步更新
     paths.rs        App 数据目录、项目根目录、PATH 解析
@@ -51,15 +50,15 @@ Tauri desktop
 
 Python 核心不直接依赖 Tauri，当前保留为 CLI、测试和 PaddleOCR 扩展迁移基础。桌面基础 OCR 已切换为 `moshi-ocr-native`，通过 Swift/PDFKit/CoreGraphics/Vision 完成图片、PDF 文本层和扫描页识别。
 
-前端层按「基础 UI」和「业务组件」拆分。`components/ui` 只沉淀按钮、下拉选择、卡片、字段、开关、分段控制、空状态、公共 Message 和应用内确认弹框等无业务语义组件；`components/features` 按识别、截图、OCR 结果窗口、翻译、剪贴板、取色和设置组织业务视图；`App.tsx` 保持为状态和命令编排层，避免继续承载大段页面结构。识别结果的预览状态留在 OCR 业务组件内，Tauri 命令只负责读取文本结果、系统打开和文件定位，不反向耦合 OCR 进程调用。公共 Message 参考 shadcn Sonner 的根级 `Toaster` 与调用式 `toast` 模式实现：`ui/src/main.tsx` 注入 `MessageProvider`，业务组件通过 `useMessage()` 触发 success/error/info/warning 轻量提示；翻译失败仍保留按钮行右侧红色错误，复制原文、译文和 OCR 文本成功统一走公共 Message。前端样式入口统一为 `ui/src/styles.scss`，不再使用 UnoCSS 或原子类生成插件。
+前端层按「基础 UI」和「业务组件」拆分。`components/ui` 只沉淀按钮、下拉选择、卡片、字段、开关、分段控制、空状态、公共 Message 和应用内确认弹框等无业务语义组件；`components/features` 按识别、截图、OCR 结果窗口、翻译、剪贴板和设置组织业务视图；`App.tsx` 保持为状态和命令编排层，避免继续承载大段页面结构。识别结果的预览状态留在 OCR 业务组件内，Tauri 命令只负责读取文本结果、系统打开和文件定位，不反向耦合 OCR 进程调用。公共 Message 参考 shadcn Sonner 的根级 `Toaster` 与调用式 `toast` 模式实现：`ui/src/main.tsx` 注入 `MessageProvider`，业务组件通过 `useMessage()` 触发 success/error/info/warning 轻量提示；翻译失败仍保留按钮行右侧红色错误，复制原文、译文和 OCR 文本成功统一走公共 Message。前端样式入口统一为 `ui/src/styles.scss`，不再使用 UnoCSS 或原子类生成插件。
 
-桌面一级导航保留工具入口：`OCR`、`翻译`、`剪贴板`、`取色`、`设置`。普通截图和截图 OCR 不进入主窗口导航，只从菜单栏或全局快捷键触发；后端管理不再是一级入口，统一归入 `设置 -> 后端与扩展`。设置页分类为 `通用`、`OCR`、`翻译`、`截图`、`剪贴板`、`取色`、`快捷键`、`后端与扩展`、`关于`；其中 `通用` 只保留界面主题等应用基础偏好，OCR 输出目录、输出格式、引擎、语言、PDF 行为和 `clearOcrResultsBeforeRun` 重新识别清理策略归入 `OCR` 分类。该策略开启时，前端会在批量识别循环前调用 `clear_ocr_output_dir`，由 Rust 删除 OCR 存储目录顶层的 `txt/json` 输出文件并清空当前结果列表；关闭时保留旧结果并追加本次结果。翻译分类不再维护总开关，左侧只选择当前配置的引擎面板，右侧用 `translationOpenaiEnabled`、`translationVolcEnabled` 分别管理各引擎启用状态；`translationEngine` 作为翻译页默认引擎，由翻译页下拉在已启用引擎中选择并持久化。原文和译文语言不再持久化为用户设置，Rust 侧统一根据文本内容自动决定方向：简体中文译为英文，其他语言译为简体中文。OpenAI 兼容引擎保留 Base URL、API Key 和模型配置；火山翻译引擎只暴露 Access Key 与 Secret Key，由 Rust 侧按火山签名协议访问 `translate.volcengineapi.com`。OCR 结果默认写入用户文稿目录下的 `墨识/OCR`；截图未配置保存目录时默认写入用户文稿目录下的 `墨识/Screenshots`。截图分类维护结果窗行为偏好，`ocrResultAutoCloseOnBlur` 默认开启，控制独立结果窗获得焦点后失焦是否自动关闭。设置页由 `SettingsPage` 维护最新草稿，控件变更后交给 `App.tsx` 以 500ms 防抖调用 `save_app_settings`，并通过串行队列写入 App 数据目录下的 `settings.db`；失焦、目录选择和显式重置等关键动作会立即 flush。最近取色历史通过 `load_color_history` / `save_color_history` 写入同一个 SQLite 设置库。旧版本 `localStorage` 设置和取色历史会在 SQLite 为空时自动迁移一次，迁移成功后清理旧 key。只有序列化内容变化时才同步快捷键与剪贴板后端配置。
+桌面一级导航保留工具入口：`OCR`、`翻译`、`剪贴板`、`设置`。普通截图和截图 OCR 不进入主窗口导航，只从菜单栏或全局快捷键触发；后端管理不再是一级入口，统一归入 `设置 -> 后端与扩展`。设置页分类为 `通用`、`OCR`、`翻译`、`截图`、`剪贴板`、`快捷键`、`后端与扩展`、`关于`；其中 `通用` 只保留界面主题等应用基础偏好，OCR 输出目录、输出格式、引擎、语言、PDF 行为和 `clearOcrResultsBeforeRun` 重新识别清理策略归入 `OCR` 分类。该策略开启时，前端会在批量识别循环前调用 `clear_ocr_output_dir`，由 Rust 删除 OCR 存储目录顶层的 `txt/json` 输出文件并清空当前结果列表；关闭时保留旧结果并追加本次结果。翻译分类不再维护总开关，左侧只选择当前配置的引擎面板，右侧用 `translationOpenaiEnabled`、`translationVolcEnabled` 分别管理各引擎启用状态；`translationEngine` 作为翻译页默认引擎，由翻译页下拉在已启用引擎中选择并持久化。原文和译文语言不再持久化为用户设置，Rust 侧统一根据文本内容自动决定方向：简体中文译为英文，其他语言译为简体中文。OpenAI 兼容引擎保留 Base URL、API Key 和模型配置；火山翻译引擎只暴露 Access Key 与 Secret Key，由 Rust 侧按火山签名协议访问 `translate.volcengineapi.com`。OCR 结果默认写入用户文稿目录下的 `墨识/OCR`；截图未配置保存目录时默认写入用户文稿目录下的 `墨识/Screenshots`。截图分类维护结果窗行为偏好，`ocrResultAutoCloseOnBlur` 默认开启，控制独立结果窗获得焦点后失焦是否自动关闭。设置页由 `SettingsPage` 维护最新草稿，控件变更后交给 `App.tsx` 以 500ms 防抖调用 `save_app_settings`，并通过串行队列写入 App 数据目录下的 `settings.db`；失焦、目录选择和显式重置等关键动作会立即 flush。旧版本 `localStorage` 设置会在 SQLite 为空时自动迁移一次，迁移成功后清理旧 key。只有序列化内容变化时才同步快捷键与剪贴板后端配置。
 
 设置页使用独立的面板滚动边界：`.settings-layout` 负责左右分栏，`.settings-sidebar` 与 `.settings-scroll` 分别承载分类列表和当前分类内容的内部滚动，`.settings-actions` 留在滚动区外侧固定显示恢复默认操作。新增设置分类或较长表单时，应继续通过 `SettingsSection` 保持「内容可滚动、底部操作可见」的结构。
 
-macOS 菜单栏入口由 `src-tauri/src/tray.rs` 独立维护，启动时注册右上角常驻图标和下拉菜单。应用启动默认隐藏主窗口和 Dock 图标，并把 activation policy 设为 accessory；主窗口收到系统关闭请求时由 `main.rs` 阻止销毁并改为隐藏窗口，避免左上角关闭按钮结束后台托盘、快捷键、截图服务和剪贴板轮询，真正退出只走托盘「退出墨识」。托盘图标使用代码生成的透明 template 图标，让 macOS 按浅色/深色菜单栏自动着色，并把主体控制在接近 16x16 的视觉盒内，避免直接缩放 App 图标导致黑块或透明留白过大导致图标偏小；托盘「OCR」会唤起主窗口并切换到文件识别页面，托盘「翻译」会唤起主窗口并切换到翻译页面；托盘「截屏」和「截图 OCR」优先复用启动时预热的 `macos-capture/bin/moshi-capture-helper --service` 常驻截图服务，不打开主工作台窗口，服务异常时 Rust 侧回退到一次性 helper；如果 helper、屏幕录制权限或 OCR 后端失败，托盘入口会弹出系统错误提示，避免静默失败；「取色」「设置」仍可唤起主窗口并切换到对应页面。
+macOS 菜单栏入口由 `src-tauri/src/tray.rs` 独立维护，启动时注册右上角常驻图标和下拉菜单。应用启动默认隐藏主窗口和 Dock 图标，并把 activation policy 设为 accessory；主窗口收到系统关闭请求时由 `main.rs` 阻止销毁并改为隐藏窗口，避免左上角关闭按钮结束后台托盘、快捷键、截图服务和剪贴板轮询，真正退出只走托盘「退出墨识」。托盘图标使用代码生成的透明 template 图标，让 macOS 按浅色/深色菜单栏自动着色，并把主体控制在接近 16x16 的视觉盒内，避免直接缩放 App 图标导致黑块或透明留白过大导致图标偏小；托盘「OCR」会唤起主窗口并切换到文件识别页面，托盘「翻译」会唤起主窗口并切换到翻译页面；托盘「截屏」和「截图 OCR」优先复用启动时预热的 `macos-capture/bin/moshi-capture-helper --service` 常驻截图服务，不打开主工作台窗口，服务异常时 Rust 侧回退到一次性 helper；如果 helper、屏幕录制权限或 OCR 后端失败，托盘入口会弹出系统错误提示，避免静默失败；「设置」仍可唤起主窗口并切换到对应页面。
 
-全局快捷键由 `src-tauri/src/shortcuts.rs` 统一管理。`ShortcutBindings` 是面向前后端的 DTO，字段名即功能 ID（`ocr`、`screenshot`、`screenshotOcr`、`translation`、`clipboard`、`color`、`settings`），值为 Tauri Accelerator 字符串，空字符串表示不注册该快捷键。`register_all` 先调用 `unregister_all` 清空旧绑定，再用 `GlobalShortcutExt::on_shortcut` 逐个注册新加速器，handler 收到 `Pressed` 事件时调用 `tray::dispatch_action(handle, id)`，与菜单点击共用同一分发路径，保证两条入口行为一致。注册完成后 `register_all` 会调用 `tray::rebuild_menu` 重建托盘菜单，让菜单项右侧的快捷键提示（`MenuItem::with_id` 第 5 个参数传入 accelerator）与最新绑定同步，菜单宽度也会随提示自动拓展。启动时 `main.rs` 先注册默认绑定，前端加载本地设置后通过 `register_shortcuts` 命令覆盖；用户在「系统设置 > 快捷键」修改绑定并让控件失焦后，前端会再次调用 `register_shortcuts` 让绑定立即生效。`ShortcutBindings` 通过 `tauri-plugin-global-shortcut` 的 `ShortcutWrapper::try_from` 校验加速器格式，避免非法字符串进入注册流程。
+全局快捷键由 `src-tauri/src/shortcuts.rs` 统一管理。`ShortcutBindings` 是面向前后端的 DTO，字段名即功能 ID（`ocr`、`screenshot`、`screenshotOcr`、`translation`、`clipboard`、`settings`），值为 Tauri Accelerator 字符串，空字符串表示不注册该快捷键。`register_all` 先调用 `unregister_all` 清空旧绑定，再用 `GlobalShortcutExt::on_shortcut` 逐个注册新加速器，handler 收到 `Pressed` 事件时调用 `tray::dispatch_action(handle, id)`，与菜单点击共用同一分发路径，保证两条入口行为一致。注册完成后 `register_all` 会调用 `tray::rebuild_menu` 重建托盘菜单，让菜单项右侧的快捷键提示（`MenuItem::with_id` 第 5 个参数传入 accelerator）与最新绑定同步，菜单宽度也会随提示自动拓展。启动时 `main.rs` 先注册默认绑定，前端加载本地设置后通过 `register_shortcuts` 命令覆盖；用户在「系统设置 > 快捷键」修改绑定并让控件失焦后，前端会再次调用 `register_shortcuts` 让绑定立即生效。`ShortcutBindings` 通过 `tauri-plugin-global-shortcut` 的 `ShortcutWrapper::try_from` 校验加速器格式，避免非法字符串进入注册流程。
 
 截图浮层由 Swift/AppKit 原生实现，不经过 WebView。`MoshiCaptureHelper.swift` 支持一次性 CLI 和 `--service` JSONL 常驻模式；常驻模式平时只保留 Swift 进程和 AppKit event loop，收到 `capture` 指令后才创建浮层并在完成后清理窗口，返回带 `requestId` 的一行 JSON。创建浮层前会预检并请求屏幕录制权限，再为每个 `NSScreen` 创建透明、无边框、置顶的 `NSPanel`，在当前桌面上直接绘制半透明遮罩、蓝色选区、尺寸提示、8 个边角拖拽点、矩形、圆形、箭头、画笔、文字、撤销、OCR、保存、复制、关闭和确认工具。工具栏使用 Swift 绘制语义化图标，不依赖文字标签；框选完成后默认处于移动/调整状态，不默认选中矩形标注工具，点击选区内部会拖拽移动并使用手型光标，拖拽四边或四角手柄会二次调整大小并使用横向、纵向或斜向 resize 光标。文字标注使用浮层内联输入，不依赖可能被置顶窗口遮挡的系统 modal。确认动作发生后，helper 先隐藏浮层，再通过 `NSScreenNumber` 匹配当前浮层所在的 `SCDisplay`，把浮层左上角选区坐标转换为 ScreenCaptureKit 的 display logical/display space 坐标后异步获取选区图像，避免 AppKit 底部原点坐标混入截图 API 导致偏移；Swift 内继续用选区内左上角标注坐标和 CoreGraphics bitmap context 把底图和标注矢量合成为最终 PNG。该路径要求 macOS 14 或更高版本；第一版不包含长截图、贴图、马赛克或固定到屏幕。
 
@@ -71,7 +70,7 @@ Tauri `assetProtocol` 允许默认截图目录 `~/Documents/墨识/**`、旧 OCR
 
 桌面外层 `.shell` 负责窗口 padding 和纵向高度，页面主内容使用 `width: 100%` 跟随窗口展开；识别页 `.main-workspace` 作为 flex 子项撑满剩余高度，卡片内部通过 `min-height: 0` 把滚动限制在列表或预览内容区。
 
-界面主题由 `ui/src/lib/theme.ts` 统一管理，设置项保存 `system`、`light` 或 `dark` 偏好。选择 `system` 时监听浏览器的 `prefers-color-scheme`，并把解析后的主题写到根节点 `data-theme`；组件样式通过 `ui/src/styles.scss` 中的 CSS 语义变量取色，避免业务组件直接维护深浅色分支。
+界面主题由 `ui/src/lib/theme.ts` 统一管理，设置项保存 `system`、`light` 或 `dark` 偏好。选择 `system` 时监听浏览器的 `prefers-color-scheme`，并把解析后的主题写到根节点 `data-theme`；组件样式通过 `ui/src/styles.scss` 中的 CSS 语义变量读取颜色，避免业务组件直接维护深浅色分支。
 
 目标架构是 Apple Vision 内置默认可用，PaddleOCR 及其他引擎通过扩展包引入。完整方案见 [native-backend-extension-refactor.md](native-backend-extension-refactor.md)。
 
@@ -91,7 +90,7 @@ input/              本地临时输入，不提交
 - 新桌面基础 OCR 能力优先加在 `apple-vision/AppleVisionOCR.swift` 或拆到 `apple-vision/` 下的 Swift 模块；Python CLI 后端仍加在 `src/mac_local_ocr/backends.py` 或拆到 `src/mac_local_ocr/backends/`。
 - 新输入格式优先扩展 `document.py`，保持 CLI 参数层薄。
 - 新桌面命令先在 `commands.rs` 定义 DTO 和命令，再把具体执行逻辑放到领域模块。
-- 截图、翻译、剪贴板和取色等工具能力优先放在独立领域模块，再通过 `commands.rs` 暴露；翻译新增服务商时在 `translation.rs` 中通过引擎分支封装认证、请求和响应解析，前端只扩展设置 DTO；macOS 截图交互放在 `macos-capture/` Swift helper，Rust 只做进程编排和结果衔接，不塞回 `backend.rs`。
+- 截图、翻译和剪贴板等工具能力优先放在独立领域模块，再通过 `commands.rs` 暴露；翻译新增服务商时在 `translation.rs` 中通过引擎分支封装认证、请求和响应解析，前端只扩展设置 DTO；macOS 截图交互放在 `macos-capture/` Swift helper，Rust 只做进程编排和结果衔接，不塞回 `backend.rs`。
 - `macos-capture` helper 的 CLI 参数、`--service` JSONL 请求/响应和 JSON 输出属于 Rust 调用协议；调整时必须同步 `scripts/smoke_macos_capture_helper.sh`，保证非 GUI smoke 能覆盖协议合法、非法参数和 service ready。helper 的 `--self-test-render` 会生成一张标注合成 PNG，用于验证 CoreGraphics 合成链路，不请求屏幕录制权限。
 - 普通截图与截图 OCR 的状态不要混在一起：普通截图页负责图片预览和截图工具栏；截图 OCR 不提供主窗口页面，识别结果统一进入独立 OCR 结果窗口。
 - 输出文件预览只读取 `txt/json` 等文本产物，列表和预览列只展示输出文件名，不展示完整路径；预览列默认关闭，由用户点击结果行或「预览」打开，预览头部只保留关闭图标；打开和定位由列表行命令调用系统能力完成。

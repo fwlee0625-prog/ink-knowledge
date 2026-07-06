@@ -3,7 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardPage } from "./components/features/clipboard/ClipboardPage";
-import { ColorPage } from "./components/features/color/ColorPage";
 import { OcrPage } from "./components/features/ocr/OcrPage";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
 import { TranslatePage } from "./components/features/translate/TranslatePage";
@@ -23,8 +22,6 @@ import type {
   ClipboardHistoryItem,
   ClipboardRepoConfig,
   ClipboardTextResponse,
-  ColorCopyFormat,
-  ColorSampleResponse,
   DefaultSettings,
   ExtensionInfo,
   NativeCaptureResponse,
@@ -41,7 +38,6 @@ import type {
   View,
 } from "./types";
 
-const colorHistoryKey = "mac-local-ocr.color-history";
 const settingsSaveDebounceMs = 500;
 
 const translationEngineLabels: Record<TranslationEngine, string> = {
@@ -59,7 +55,7 @@ type PendingSettingsSave = {
 type TrayOpenView = View | "screenshot" | "screenshotOcr";
 
 function normalizeTrayView(view: TrayOpenView): View {
-  return view === "ocr" || view === "translate" || view === "clipboard" || view === "color" || view === "settings"
+  return view === "ocr" || view === "translate" || view === "clipboard" || view === "settings"
     ? view
     : "ocr";
 }
@@ -93,7 +89,6 @@ export function App() {
   const [progress, setProgress] = useState<RecognitionProgress>(null);
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
   const [clipboardHistory, setClipboardHistory] = useState<ClipboardHistoryItem[]>([]);
-  const [recentColors, setRecentColors] = useState<ColorSampleResponse[]>([]);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState("");
   const persistedSettingsJsonRef = useRef("");
@@ -172,29 +167,6 @@ export function App() {
     }
   }, []);
 
-  const loadColorHistory = useCallback(async () => {
-    try {
-      const saved = await invoke<ColorSampleResponse[] | null>("load_color_history");
-      if (Array.isArray(saved)) {
-        setRecentColors(saved);
-        return;
-      }
-
-      const legacyHistory = readLocalArray<ColorSampleResponse>(colorHistoryKey);
-      setRecentColors(legacyHistory);
-      if (legacyHistory.length > 0) {
-        void invoke("save_color_history", { history: legacyHistory })
-          .then(() => removeLocalValue(colorHistoryKey))
-          .catch((error) => {
-            setLog(`迁移取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
-          });
-      }
-    } catch (error) {
-      setRecentColors(readLocalArray<ColorSampleResponse>(colorHistoryKey));
-      setLog(`加载取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, []);
-
   const loadDefaultSettings = useCallback(async () => {
     const defaults = await invoke<DefaultSettings>("get_default_settings");
     const baseSettings: AppSettings = {
@@ -232,7 +204,6 @@ export function App() {
     const nextSettings = { ...baseSettings, ...saved };
     nextSettings.recursionDepth = clampNumber(nextSettings.recursionDepth, 1, 5);
     nextSettings.clipboardHistoryLimit = clampNumber(nextSettings.clipboardHistoryLimit, 10, 500);
-    nextSettings.colorHistoryLimit = clampNumber(nextSettings.colorHistoryLimit, 6, 100);
     if (!migratingLegacySettings) {
       persistedSettingsJsonRef.current = JSON.stringify(nextSettings);
       queuedSettingsJsonRef.current = "";
@@ -247,8 +218,7 @@ export function App() {
   useEffect(() => {
     void loadDefaultSettings();
     void loadClipboardHistory();
-    void loadColorHistory();
-  }, [loadDefaultSettings, loadClipboardHistory, loadColorHistory]);
+  }, [loadDefaultSettings, loadClipboardHistory]);
 
   // 监听后端剪贴板变化事件，自动刷新历史
   useEffect(() => {
@@ -756,25 +726,6 @@ export function App() {
     }
   };
 
-  const sampleColor = async () => {
-    await runBusy(async () => {
-      const color = await invoke<ColorSampleResponse>("sample_screen_color");
-      setRecentColors((current) => {
-        const next = [color, ...current.filter((item) => item.hex !== color.hex)].slice(0, settings.colorHistoryLimit);
-        void invoke("save_color_history", { history: next }).catch((error) => {
-          setLog(`保存取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
-        });
-        return next;
-      });
-      await writeClipboardText(colorValue(color, settings.colorCopyFormat), "manual", false);
-      setLog(`已取色: ${color.hex}`);
-    });
-  };
-
-  const copyColor = async (color: ColorSampleResponse, format = settings.colorCopyFormat as ColorCopyFormat) => {
-    await writeClipboardText(colorValue(color, format), "manual");
-  };
-
   const title = useMemo(() => {
     if (view === "settings") return "系统设置";
     return "墨识";
@@ -796,9 +747,6 @@ export function App() {
           </AppButton>
           <AppButton active={view === "clipboard"} disabled={busy} onClick={() => setView("clipboard")}>
             剪贴板
-          </AppButton>
-          <AppButton active={view === "color"} disabled={busy} onClick={() => setView("color")}>
-            取色
           </AppButton>
           <AppButton active={view === "settings"} disabled={busy} onClick={() => setView("settings")}>
             设置
@@ -843,16 +791,6 @@ export function App() {
         />
       )}
 
-      {view === "color" && (
-        <ColorPage
-          busy={busy}
-          copyFormat={settings.colorCopyFormat}
-          onCopyColor={copyColor}
-          onSampleColor={sampleColor}
-          recentColors={recentColors}
-        />
-      )}
-
       {view === "settings" && (
         <SettingsPage
           busy={busy}
@@ -876,27 +814,4 @@ export function App() {
       {confirmDialog}
     </section>
   );
-}
-
-function readLocalArray<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function removeLocalValue(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // 只用于旧 localStorage 数据迁移，失败时不影响 SQLite 主存储。
-  }
-}
-
-function colorValue(color: ColorSampleResponse, format: ColorCopyFormat) {
-  if (format === "rgb") return color.rgb;
-  if (format === "hsl") return color.hsl;
-  return color.hex;
 }

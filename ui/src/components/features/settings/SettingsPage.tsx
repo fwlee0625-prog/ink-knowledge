@@ -6,7 +6,6 @@ import { defaultShortcutBindings } from "../../../lib/settings";
 import type {
   AppSettings,
   BackendStatus,
-  ColorCopyFormat,
   ExtensionInfo,
   OcrEngine,
   SettingsCategory,
@@ -44,12 +43,6 @@ const themeOptions: Array<{ label: string; value: ThemePreference }> = [
   { label: "深色", value: "dark" },
 ];
 
-const colorFormatOptions: Array<{ label: string; value: ColorCopyFormat }> = [
-  { label: "HEX", value: "hex" },
-  { label: "RGB", value: "rgb" },
-  { label: "HSL", value: "hsl" },
-];
-
 const translationEngineOptions: Array<{ label: string; value: TranslationEngine }> = [
   { label: "OpenAI 兼容", value: "openai-compatible" },
   { label: "火山翻译", value: "volcengine" },
@@ -61,7 +54,6 @@ const sections: Array<{ id: SettingsCategory; label: string; description: string
   { id: "translation", label: "翻译", description: "API 和语言偏好" },
   { id: "screenshot", label: "截图", description: "保存目录和 OCR 快捷行为" },
   { id: "clipboard", label: "剪贴板", description: "文本、图片和文件历史" },
-  { id: "color", label: "取色", description: "复制格式和最近颜色" },
   { id: "shortcuts", label: "快捷键", description: "全局快捷键绑定" },
   { id: "backend", label: "后端与扩展", description: "状态检查和 OCR 扩展" },
   { id: "about", label: "关于", description: "版本与权限说明" },
@@ -446,32 +438,6 @@ export function SettingsPage({
           </SettingsSection>
         )}
 
-        {activeSection === "color" && (
-          <SettingsSection
-            description="控制取色结果默认复制格式和最近颜色数量。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="取色"
-          >
-            <div className="settings-list">
-              <SettingRow description="点击颜色时默认复制的格式。" label="默认复制格式">
-                <SegmentedControl
-                  onChange={(colorCopyFormat) => updateSettings((current) => ({ ...current, colorCopyFormat }))}
-                  options={colorFormatOptions}
-                  value={settings.colorCopyFormat}
-                />
-              </SettingRow>
-              <NumberRow
-                description="超过上限后保留最近取色记录。"
-                label="最近颜色数量"
-                max={100}
-                min={6}
-                onChange={(colorHistoryLimit) => updateSettings((current) => ({ ...current, colorHistoryLimit }))}
-                value={settings.colorHistoryLimit}
-              />
-            </div>
-          </SettingsSection>
-        )}
-
         {activeSection === "shortcuts" && (
           <SettingsSection
             description="全局快捷键在主窗口隐藏时也能触发。点击输入框后按下组合键即可绑定；按 Esc 取消，按 Backspace 清除。"
@@ -533,17 +499,6 @@ export function SettingsPage({
                   }))
                 }
                 value={settings.shortcutBindings.clipboard}
-              />
-              <ShortcutRow
-                description="进入屏幕取色，结果按设置中的默认格式复制。"
-                label="取色"
-                onChange={(color) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, color },
-                  }))
-                }
-                value={settings.shortcutBindings.color}
               />
               <ShortcutRow
                 description="打开主窗口的系统设置页。"
@@ -650,7 +605,7 @@ export function SettingsPage({
               </div>
               <div>
                 <strong>权限说明</strong>
-                <span>截图和取色需要 macOS 屏幕录制权限；剪贴板功能会读写系统剪贴板。</span>
+                <span>截图需要 macOS 屏幕录制权限；剪贴板功能会读写系统剪贴板。</span>
               </div>
               <div>
                 <strong>翻译说明</strong>

@@ -1772,55 +1772,6 @@ pre.preview-content {
   }
 }
 
-.color-result {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-  padding: 22px;
-
-  > span {
-    grid-column: 1 / -1;
-    color: $muted-2;
-  }
-}
-
-.color-swatch-large {
-  width: 180px;
-  aspect-ratio: 1;
-  border: 1px solid $border;
-  border-radius: 8px;
-}
-
-.color-values {
-  display: grid;
-  gap: 10px;
-
-  button {
-    min-height: 48px;
-    padding: 0 14px;
-    border: 1px solid $border-soft;
-    color: $text;
-    background: $surface-muted;
-    text-align: left;
-  }
-}
-
-.recent-colors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 18px;
-  border-top: 1px solid $border-soft;
-
-  button {
-    width: 34px;
-    height: 34px;
-    border: 1px solid $border;
-    border-radius: 999px;
-  }
-}
-
 .about-grid {
   display: grid;
   gap: 12px;

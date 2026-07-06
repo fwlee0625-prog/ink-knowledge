@@ -4,7 +4,6 @@ use serde_json::Value;
 use crate::paths::app_data_dir;
 
 const APP_SETTINGS_KEY: &str = "app";
-const COLOR_HISTORY_KEY: &str = "color_history";
 
 fn open_connection(app: &tauri::AppHandle) -> Result<Connection, String> {
     let dir = app_data_dir(app)?;
@@ -85,18 +84,6 @@ pub fn save_app_settings(app: tauri::AppHandle, settings: Value) -> Result<(), S
 
 pub fn clear_app_settings(app: tauri::AppHandle) -> Result<(), String> {
     clear_key(app, APP_SETTINGS_KEY)
-}
-
-pub fn load_color_history(app: tauri::AppHandle) -> Result<Option<Value>, String> {
-    load_json(app, COLOR_HISTORY_KEY)
-}
-
-pub fn save_color_history(app: tauri::AppHandle, history: Value) -> Result<(), String> {
-    if !history.is_array() {
-        return Err("取色历史必须是 JSON 数组。".to_string());
-    }
-
-    save_json(app, COLOR_HISTORY_KEY, history)
 }
 
 fn unix_millis_string() -> String {

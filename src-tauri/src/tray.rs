@@ -18,7 +18,6 @@ const ACTION_SCREENSHOT: &str = "screenshot";
 const ACTION_SCREENSHOT_OCR: &str = "screenshot-ocr";
 const ACTION_TRANSLATION: &str = "translation";
 const ACTION_CLIPBOARD: &str = "clipboard";
-const ACTION_COLOR: &str = "color";
 const ACTION_SETTINGS: &str = "settings";
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
@@ -85,13 +84,6 @@ fn build_menu(app: &AppHandle, bindings: &ShortcutBindings) -> tauri::Result<Men
         true,
         accelerator_opt(&bindings.clipboard),
     )?;
-    let open_color = MenuItem::with_id(
-        app,
-        ACTION_COLOR,
-        "取色",
-        true,
-        accelerator_opt(&bindings.color),
-    )?;
     let open_settings = MenuItem::with_id(
         app,
         ACTION_SETTINGS,
@@ -110,7 +102,6 @@ fn build_menu(app: &AppHandle, bindings: &ShortcutBindings) -> tauri::Result<Men
             &open_screenshot_ocr,
             &open_translation,
             &open_clipboard,
-            &open_color,
             &open_settings,
             &separator,
             &quit,
@@ -128,7 +119,7 @@ fn accelerator_opt(accelerator: &str) -> Option<&str> {
 }
 
 /// 菜单点击和全局快捷键共用的分发入口。
-/// `id` 取功能 ID：`ocr`、`screenshot`、`screenshot-ocr`、`translation`、`clipboard`、`color`、`settings`。
+/// `id` 取功能 ID：`ocr`、`screenshot`、`screenshot-ocr`、`translation`、`clipboard`、`settings`。
 pub fn dispatch_action(app: &AppHandle, id: &str) {
     match id {
         ACTION_OCR => open_view(app, "ocr"),
@@ -136,7 +127,6 @@ pub fn dispatch_action(app: &AppHandle, id: &str) {
         ACTION_SCREENSHOT_OCR => start_native_capture(app, Some("ocr")),
         ACTION_TRANSLATION => open_view(app, "translate"),
         ACTION_CLIPBOARD => open_view(app, "clipboard"),
-        ACTION_COLOR => open_view(app, "color"),
         ACTION_SETTINGS => open_view(app, "settings"),
         _ => {}
     }

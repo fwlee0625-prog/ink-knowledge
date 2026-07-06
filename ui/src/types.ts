@@ -54,8 +54,6 @@ export type OcrEngine = "paddle" | "apple-vision";
 
 export type ThemePreference = "system" | "light" | "dark";
 
-export type ColorCopyFormat = "hex" | "rgb" | "hsl";
-
 export type TranslationEngine = "openai-compatible" | "volcengine";
 
 /// 全局快捷键绑定。字段名与 Rust 侧 ShortcutBindings serde rename 一致。
@@ -66,7 +64,6 @@ export type ShortcutBindings = {
   screenshotOcr: string;
   translation: string;
   clipboard: string;
-  color: string;
   settings: string;
 };
 
@@ -96,8 +93,6 @@ export type AppSettings = {
   clipboardRecordText: boolean;
   clipboardHistoryLimit: number;
   clipboardIgnoreSensitive: boolean;
-  colorCopyFormat: ColorCopyFormat;
-  colorHistoryLimit: number;
   shortcutBindings: ShortcutBindings;
 };
 
@@ -112,7 +107,7 @@ export type DefaultSettings = {
   recursion_depth: number;
 };
 
-export type View = "ocr" | "translate" | "clipboard" | "color" | "settings";
+export type View = "ocr" | "translate" | "clipboard" | "settings";
 
 export type SettingsCategory =
   | "general"
@@ -120,7 +115,6 @@ export type SettingsCategory =
   | "translation"
   | "screenshot"
   | "clipboard"
-  | "color"
   | "shortcuts"
   | "backend"
   | "about";
@@ -203,16 +197,6 @@ export type ClipboardHistoryItem = {
 
 export type ClipboardRepoConfig = {
   max_items: number;
-};
-
-export type ColorSampleResponse = {
-  image_path: string;
-  hex: string;
-  rgb: string;
-  hsl: string;
-  red: number;
-  green: number;
-  blue: number;
 };
 
 export type OcrDialogData = {

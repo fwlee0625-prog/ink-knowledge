@@ -13,7 +13,6 @@ pub use crate::extensions::{ExtensionInfo, InstallExtensionRequest, UninstallExt
 pub use crate::shortcuts::ShortcutBindings;
 pub use crate::{
     clipboard::{ClipboardTextResponse, ClipboardWriteRequest},
-    color_picker::ColorSampleResponse,
     native_capture::{NativeCaptureRequest, NativeCaptureResponse},
     ocr_result_window::{OcrResultWindowPayload, OcrResultWindowRequest, OcrResultWindowResponse},
     screenshot::{
@@ -156,16 +155,6 @@ pub async fn save_app_settings(app: tauri::AppHandle, settings: Value) -> Result
 #[tauri::command]
 pub async fn clear_app_settings(app: tauri::AppHandle) -> Result<(), String> {
     run_blocking(move || crate::settings_repo::clear_app_settings(app)).await
-}
-
-#[tauri::command]
-pub async fn load_color_history(app: tauri::AppHandle) -> Result<Option<Value>, String> {
-    run_blocking(move || crate::settings_repo::load_color_history(app)).await
-}
-
-#[tauri::command]
-pub async fn save_color_history(app: tauri::AppHandle, history: Value) -> Result<(), String> {
-    run_blocking(move || crate::settings_repo::save_color_history(app, history)).await
 }
 
 #[tauri::command]
@@ -383,11 +372,6 @@ pub async fn update_clipboard_config(
     let state = app.state::<crate::native_pasteboard::PasteboardState>();
     state.update_config(config);
     Ok(())
-}
-
-#[tauri::command]
-pub async fn sample_screen_color(app: tauri::AppHandle) -> Result<ColorSampleResponse, String> {
-    run_blocking(move || crate::color_picker::sample_screen_color(app)).await
 }
 
 #[tauri::command]

@@ -1,7 +1,6 @@
 mod backend;
 mod clipboard;
 mod clipboard_repo;
-mod color_picker;
 mod commands;
 mod extensions;
 mod native_capture;
@@ -68,7 +67,6 @@ pub fn run() {
             commands::get_default_shortcut_bindings,
             commands::get_pending_ocr_result,
             commands::load_app_settings,
-            commands::load_color_history,
             commands::list_clipboard_history,
             commands::list_extensions,
             commands::open_result_file,
@@ -79,10 +77,8 @@ pub fn run() {
             commands::reveal_result_file,
             commands::read_clipboard_text,
             commands::run_screenshot_ocr,
-            commands::sample_screen_color,
             commands::save_screenshot,
             commands::save_app_settings,
-            commands::save_color_history,
             commands::scan_supported_files,
             commands::set_clipboard_pinned,
             commands::set_clipboard_polling,

@@ -11,7 +11,6 @@ export const defaultShortcutBindings: ShortcutBindings = {
   screenshotOcr: "Alt+Shift+X",
   translation: "Alt+Shift+T",
   clipboard: "Alt+Shift+V",
-  color: "Alt+Shift+C",
   settings: "Alt+Shift+Comma",
 };
 
@@ -41,8 +40,6 @@ export const fallbackSettings: AppSettings = {
   clipboardRecordText: true,
   clipboardHistoryLimit: 100,
   clipboardIgnoreSensitive: true,
-  colorCopyFormat: "hex",
-  colorHistoryLimit: 24,
   shortcutBindings: { ...defaultShortcutBindings },
 };
 
@@ -56,7 +53,6 @@ function normalizeShortcutBindings(value: Partial<ShortcutBindings> | undefined)
       typeof value?.screenshotOcr === "string" ? value.screenshotOcr : fallback.screenshotOcr,
     translation: typeof value?.translation === "string" ? value.translation : fallback.translation,
     clipboard: typeof value?.clipboard === "string" ? value.clipboard : fallback.clipboard,
-    color: typeof value?.color === "string" ? value.color : fallback.color,
     settings: typeof value?.settings === "string" ? value.settings : fallback.settings,
   };
 }
@@ -67,6 +63,8 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   }
 
   const saved = { ...(value ?? {}) };
+  delete (saved as Record<string, unknown>).colorCopyFormat;
+  delete (saved as Record<string, unknown>).colorHistoryLimit;
   if (saved.outputTxt === false && saved.outputJson === false) {
     saved.outputTxt = true;
   }
@@ -88,12 +86,6 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   }
   if (typeof saved.clipboardHistoryLimit === "number") {
     saved.clipboardHistoryLimit = clampNumber(saved.clipboardHistoryLimit, 10, 500);
-  }
-  if (typeof saved.colorHistoryLimit === "number") {
-    saved.colorHistoryLimit = clampNumber(saved.colorHistoryLimit, 6, 100);
-  }
-  if (!["hex", "rgb", "hsl"].includes(String(saved.colorCopyFormat))) {
-    saved.colorCopyFormat = "hex";
   }
   if (typeof saved.ocrResultAutoCloseOnBlur !== "boolean") {
     saved.ocrResultAutoCloseOnBlur = true;

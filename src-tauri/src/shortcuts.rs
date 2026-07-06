@@ -16,8 +16,6 @@ pub struct ShortcutBindings {
     pub translation: String,
     #[serde(rename = "clipboard")]
     pub clipboard: String,
-    #[serde(rename = "color")]
-    pub color: String,
     #[serde(rename = "settings")]
     pub settings: String,
 }
@@ -30,7 +28,6 @@ impl Default for ShortcutBindings {
             screenshot_ocr: "Alt+Shift+X".to_string(),
             translation: "Alt+Shift+T".to_string(),
             clipboard: "Alt+Shift+V".to_string(),
-            color: "Alt+Shift+C".to_string(),
             settings: "Alt+Shift+Comma".to_string(),
         }
     }
@@ -45,7 +42,6 @@ impl ShortcutBindings {
             ("screenshot-ocr", self.screenshot_ocr.as_str()),
             ("translation", self.translation.as_str()),
             ("clipboard", self.clipboard.as_str()),
-            ("color", self.color.as_str()),
             ("settings", self.settings.as_str()),
         ]
     }
