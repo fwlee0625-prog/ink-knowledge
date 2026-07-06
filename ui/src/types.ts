@@ -98,6 +98,7 @@ export type AppSettings = {
 
 export type DefaultSettings = {
   output_dir: string;
+  screenshot_output_dir: string;
   ocr_engine: OcrEngine;
   dpi: number;
   lang: string;

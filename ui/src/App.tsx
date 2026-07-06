@@ -172,6 +172,7 @@ export function App() {
     const baseSettings: AppSettings = {
       ...fallbackSettings,
       outputDir: defaults.output_dir,
+      screenshotOutputDir: defaults.screenshot_output_dir,
       ocrEngine: defaults.ocr_engine,
       dpi: defaults.dpi,
       lang: defaults.lang,
@@ -459,6 +460,23 @@ export function App() {
       }
     } catch (error) {
       setLog(`选择存储目录失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const chooseScreenshotOutputDir = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        directory: true,
+      });
+
+      if (typeof selected === "string") {
+        const nextSettings = { ...settings, screenshotOutputDir: selected };
+        setSettings(nextSettings);
+        persistSettings(nextSettings, `已选择并保存截图目录: ${selected}`, true);
+      }
+    } catch (error) {
+      setLog(`选择截图目录失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -798,6 +816,7 @@ export function App() {
           log={log}
           onCheckBackend={checkBackend}
           onChooseOutputDir={chooseOutputDir}
+          onChooseScreenshotOutputDir={chooseScreenshotOutputDir}
           onInstallExtension={installExtension}
           onPersistSettings={(nextSettings, immediate) =>
             persistSettings(nextSettings, "设置已自动保存。", immediate)

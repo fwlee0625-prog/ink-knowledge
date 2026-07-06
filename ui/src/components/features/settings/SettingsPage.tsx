@@ -22,6 +22,7 @@ type SettingsPageProps = {
   status: BackendStatus | null;
   onCheckBackend: () => Promise<void>;
   onChooseOutputDir: () => Promise<void>;
+  onChooseScreenshotOutputDir: () => Promise<void>;
   onInstallExtension: () => Promise<void>;
   onResetSettings: () => Promise<void>;
   onPersistSettings: (nextSettings: AppSettings, immediate?: boolean) => void;
@@ -67,6 +68,7 @@ export function SettingsPage({
   status,
   onCheckBackend,
   onChooseOutputDir,
+  onChooseScreenshotOutputDir,
   onInstallExtension,
   onResetSettings,
   onPersistSettings,
@@ -351,15 +353,18 @@ export function SettingsPage({
             title="截图"
           >
             <div className="settings-list">
-              <TextRow
-                description="留空时使用文稿目录下的 墨识/Screenshots。"
-                label="截图保存目录"
-                onChange={(screenshotOutputDir) =>
-                  updateSettings((current) => ({ ...current, screenshotOutputDir }))
-                }
-                placeholder="默认 ~/Documents/墨识/Screenshots"
-                value={settings.screenshotOutputDir}
-              />
+              <SettingRow description="默认输出截图结果的位置。" label="截图保存目录">
+                <div className="file-row">
+                  <input
+                    onChange={(event) =>
+                      updateSettings((current) => ({ ...current, screenshotOutputDir: event.target.value }))
+                    }
+                    placeholder="默认在文稿目录下创建 墨识/Screenshots"
+                    value={settings.screenshotOutputDir}
+                  />
+                  <AppButton onClick={onChooseScreenshotOutputDir}>选择</AppButton>
+                </div>
+              </SettingRow>
               <SettingRow description="普通截图后是否自动打开 OCR；默认关闭，使用工具栏 OCR 按钮。" label="截图后自动 OCR">
                 <Toggle
                   checked={settings.screenshotAutoOcr}

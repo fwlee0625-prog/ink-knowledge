@@ -65,6 +65,9 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   const saved = { ...(value ?? {}) };
   delete (saved as Record<string, unknown>).colorCopyFormat;
   delete (saved as Record<string, unknown>).colorHistoryLimit;
+  if (typeof saved.screenshotOutputDir === "string" && saved.screenshotOutputDir.trim() === "") {
+    delete saved.screenshotOutputDir;
+  }
   if (saved.outputTxt === false && saved.outputJson === false) {
     saved.outputTxt = true;
   }

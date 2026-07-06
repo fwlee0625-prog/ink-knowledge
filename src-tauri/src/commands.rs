@@ -76,6 +76,7 @@ pub struct ResultPreview {
 #[derive(Debug, Serialize)]
 pub struct DefaultSettings {
     pub output_dir: String,
+    pub screenshot_output_dir: String,
     pub ocr_engine: String,
     pub dpi: u16,
     pub lang: String,

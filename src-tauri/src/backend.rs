@@ -70,9 +70,13 @@ pub fn get_default_settings(app: tauri::AppHandle) -> Result<DefaultSettings, St
         .map_err(|error| format!("无法获取文稿目录: {error}"))?;
     let output_dir = documents_dir.join("墨识").join("OCR");
     fs::create_dir_all(&output_dir).map_err(|error| format!("创建默认存储目录失败: {error}"))?;
+    let screenshot_output_dir = documents_dir.join("墨识").join("Screenshots");
+    fs::create_dir_all(&screenshot_output_dir)
+        .map_err(|error| format!("创建默认截图目录失败: {error}"))?;
 
     Ok(DefaultSettings {
         output_dir: output_dir.display().to_string(),
+        screenshot_output_dir: screenshot_output_dir.display().to_string(),
         ocr_engine: "apple-vision".to_string(),
         dpi: 300,
         lang: "ch".to_string(),
