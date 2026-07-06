@@ -220,10 +220,10 @@ function RecognizedFileList({ activePath, files, onOpen, onPreview, onReveal }: 
 
   return (
     <ul className="recognized-list">
-      {files.map((file) => (
+      {files.map((file, index) => (
         <li
           className={[file.status, file.outputPath === activePath ? "active" : ""].filter(Boolean).join(" ")}
-          key={`${file.inputPath}-${file.path}`}
+          key={`${file.inputPath}-${file.path}-${index}`}
           onClick={() => {
             if (file.outputPath) {
               onPreview(file.outputPath);

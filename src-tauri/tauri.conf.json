@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "墨识 OCR",
+  "productName": "墨识",
   "version": "0.1.0",
   "identifier": "com.local.mac-ocr",
   "build": {
@@ -10,17 +10,31 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "墨识 OCR",
-        "width": 1180,
+        "title": "墨识",
+        "label": "main",
+        "visible": false,
+        "skipTaskbar": true,
+        "width": 1240,
         "height": 760,
-        "minWidth": 980,
+        "minWidth": 1120,
         "minHeight": 720
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/screenshots/**",
+          "$APPDATA/clipboard-images/**",
+          "$DOCUMENT/墨识/**",
+          "$DOCUMENT/墨识 OCR/**",
+          "$TEMP/**"
+        ]
+      }
     }
   },
   "bundle": {
@@ -33,10 +47,11 @@
     ],
     "resources": [
       "../apple-vision/bin/moshi-ocr-native",
-      "../apple-vision/bin/apple-vision-ocr"
+      "../apple-vision/bin/apple-vision-ocr",
+      "../macos-capture/bin/moshi-capture-helper"
     ],
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "14.0"
     }
   }
 }

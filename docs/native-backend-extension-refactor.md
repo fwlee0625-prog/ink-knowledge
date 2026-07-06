@@ -31,7 +31,7 @@
 ## Target Architecture
 
 ```text
-墨识 OCR.app
+墨识.app
   Contents/Resources/
     moshi-ocr-native        macOS 原生基础后端
     apple-vision assets     如需保留的 helper 资源

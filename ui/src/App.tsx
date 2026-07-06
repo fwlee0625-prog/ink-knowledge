@@ -1,22 +1,87 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardPage } from "./components/features/clipboard/ClipboardPage";
+import { ColorPage } from "./components/features/color/ColorPage";
 import { OcrPage } from "./components/features/ocr/OcrPage";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
+import { TranslatePage } from "./components/features/translate/TranslatePage";
 import { AppButton, useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
-import { fallbackSettings, readSavedSettings, settingsKey } from "./lib/settings";
+import {
+  clearLegacySavedSettings,
+  fallbackSettings,
+  normalizeSavedSettings,
+  readLegacySavedSettings,
+} from "./lib/settings";
 import { useThemeMode } from "./lib/theme";
 import type {
   AppSettings,
   BackendStatus,
+  ClearOcrOutputResponse,
+  ClipboardHistoryItem,
+  ClipboardRepoConfig,
+  ClipboardTextResponse,
+  ColorCopyFormat,
+  ColorSampleResponse,
   DefaultSettings,
   ExtensionInfo,
+  NativeCaptureResponse,
+  OcrEngine,
   OcrResponse,
   RecognitionFile,
   RecognitionProgress,
+  SaveScreenshotResponse,
+  ShortcutBindings,
+  ScreenshotOcrResponse,
+  ScreenshotResponse,
+  TranslateResponse,
+  TranslationEngine,
   View,
 } from "./types";
+
+const colorHistoryKey = "mac-local-ocr.color-history";
+const settingsSaveDebounceMs = 500;
+
+const translationEngineLabels: Record<TranslationEngine, string> = {
+  "openai-compatible": "OpenAI 兼容",
+  volcengine: "火山翻译",
+};
+
+type ClipboardSource = "manual" | "ocr" | "translation" | "clipboard";
+type PendingSettingsSave = {
+  message: string;
+  serialized: string;
+  settings: AppSettings;
+};
+
+type TrayOpenView = View | "screenshot" | "screenshotOcr";
+
+function normalizeTrayView(view: TrayOpenView): View {
+  return view === "ocr" || view === "translate" || view === "clipboard" || view === "color" || view === "settings"
+    ? view
+    : "ocr";
+}
+
+function isTranslationEngineEnabled(settings: AppSettings, engine: TranslationEngine) {
+  if (engine === "openai-compatible") return settings.translationOpenaiEnabled;
+  return settings.translationVolcEnabled;
+}
+
+function enabledTranslationEngines(settings: AppSettings) {
+  return (Object.keys(translationEngineLabels) as TranslationEngine[])
+    .filter((engine) => isTranslationEngineEnabled(settings, engine))
+    .map((engine) => ({ label: translationEngineLabels[engine], value: engine }));
+}
+
+function resolveTranslationEngine(settings: AppSettings, preferredEngine = settings.translationEngine) {
+  if (isTranslationEngineEnabled(settings, preferredEngine)) {
+    return preferredEngine;
+  }
+
+  return enabledTranslationEngines(settings)[0]?.value ?? null;
+}
 
 export function App() {
   const [view, setView] = useState<View>("ocr");
@@ -26,10 +91,46 @@ export function App() {
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([]);
   const [recognizedFiles, setRecognizedFiles] = useState<RecognitionFile[]>([]);
   const [progress, setProgress] = useState<RecognitionProgress>(null);
+  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
+  const [clipboardHistory, setClipboardHistory] = useState<ClipboardHistoryItem[]>([]);
+  const [recentColors, setRecentColors] = useState<ColorSampleResponse[]>([]);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState("");
+  const persistedSettingsJsonRef = useRef("");
+  const pendingSettingsSaveRef = useRef<PendingSettingsSave | null>(null);
+  const queuedSettingsJsonRef = useRef("");
+  const settingsSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const settingsSaveTimerRef = useRef<number | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const resolvedTheme = useThemeMode(settings.themePreference);
+
+  useEffect(() => {
+    const unlisten = listen<TrayOpenView>("tray-open-view", (event) => {
+      setView(normalizeTrayView(event.payload));
+    });
+
+    return () => {
+      void unlisten.then((dispose) => dispose());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<NativeCaptureResponse>("native-capture-finished", (event) => {
+      const response = event.payload;
+      setLog(response.message);
+      if (response.imagePath && response.fileName) {
+        setScreenshot({
+          image_path: response.imagePath,
+          file_name: response.fileName,
+          message: response.message,
+        });
+      }
+    });
+
+    return () => {
+      void unlisten.then((dispose) => dispose());
+    };
+  }, []);
 
   const runBusy = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
@@ -42,29 +143,122 @@ export function App() {
     }
   }, []);
 
+  const registerShortcuts = useCallback(async (bindings: ShortcutBindings) => {
+    try {
+      await invoke("register_shortcuts", { bindings });
+    } catch (error) {
+      setLog(`注册快捷键失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, []);
+
+  const loadClipboardHistory = useCallback(async () => {
+    try {
+      const items = await invoke<ClipboardHistoryItem[]>("list_clipboard_history", { limit: 500 });
+      setClipboardHistory(items);
+    } catch (error) {
+      setLog(`加载剪贴板历史失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, []);
+
+  const syncClipboardConfig = useCallback(async (nextSettings: AppSettings) => {
+    try {
+      const config: ClipboardRepoConfig = {
+        max_items: nextSettings.clipboardHistoryLimit,
+      };
+      await invoke("update_clipboard_config", { config });
+      await invoke("set_clipboard_polling", { enabled: nextSettings.clipboardRecordText });
+    } catch (error) {
+      setLog(`同步剪贴板配置失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, []);
+
+  const loadColorHistory = useCallback(async () => {
+    try {
+      const saved = await invoke<ColorSampleResponse[] | null>("load_color_history");
+      if (Array.isArray(saved)) {
+        setRecentColors(saved);
+        return;
+      }
+
+      const legacyHistory = readLocalArray<ColorSampleResponse>(colorHistoryKey);
+      setRecentColors(legacyHistory);
+      if (legacyHistory.length > 0) {
+        void invoke("save_color_history", { history: legacyHistory })
+          .then(() => removeLocalValue(colorHistoryKey))
+          .catch((error) => {
+            setLog(`迁移取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
+          });
+      }
+    } catch (error) {
+      setRecentColors(readLocalArray<ColorSampleResponse>(colorHistoryKey));
+      setLog(`加载取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, []);
+
   const loadDefaultSettings = useCallback(async () => {
     const defaults = await invoke<DefaultSettings>("get_default_settings");
     const baseSettings: AppSettings = {
+      ...fallbackSettings,
       outputDir: defaults.output_dir,
       ocrEngine: defaults.ocr_engine,
-      themePreference: fallbackSettings.themePreference,
       dpi: defaults.dpi,
       lang: defaults.lang,
       forceOcr: defaults.force_ocr,
       outputTxt: defaults.output_txt,
       outputJson: defaults.output_json,
       recursionDepth: defaults.recursion_depth,
+      clearOcrResultsBeforeRun: fallbackSettings.clearOcrResultsBeforeRun,
     };
 
-    const saved = readSavedSettings();
+    const storedSettings = await invoke<Partial<AppSettings> | null>("load_app_settings");
+    let saved = normalizeSavedSettings(storedSettings);
+    let migratingLegacySettings = false;
+    if (Object.keys(saved).length === 0) {
+      const legacySettings = readLegacySavedSettings();
+      if (Object.keys(legacySettings).length > 0) {
+        saved = legacySettings;
+        migratingLegacySettings = true;
+        void invoke("save_app_settings", { settings: { ...baseSettings, ...legacySettings } })
+          .then(() => {
+            persistedSettingsJsonRef.current = JSON.stringify({ ...baseSettings, ...legacySettings });
+            queuedSettingsJsonRef.current = "";
+            clearLegacySavedSettings();
+          })
+          .catch((error) => {
+            setLog(`迁移旧设置失败: ${error instanceof Error ? error.message : String(error)}`);
+          });
+      }
+    }
     const nextSettings = { ...baseSettings, ...saved };
     nextSettings.recursionDepth = clampNumber(nextSettings.recursionDepth, 1, 5);
+    nextSettings.clipboardHistoryLimit = clampNumber(nextSettings.clipboardHistoryLimit, 10, 500);
+    nextSettings.colorHistoryLimit = clampNumber(nextSettings.colorHistoryLimit, 6, 100);
+    if (!migratingLegacySettings) {
+      persistedSettingsJsonRef.current = JSON.stringify(nextSettings);
+      queuedSettingsJsonRef.current = "";
+    }
     setSettings(nextSettings);
-  }, []);
+    // 用 SQLite 中保存的偏好覆盖后端默认绑定；忽略失败，避免阻塞设置加载。
+    void registerShortcuts(nextSettings.shortcutBindings);
+    // 同步剪贴板历史容量和轮询开关到后端
+    void syncClipboardConfig(nextSettings);
+  }, [registerShortcuts, syncClipboardConfig]);
 
   useEffect(() => {
     void loadDefaultSettings();
-  }, [loadDefaultSettings]);
+    void loadClipboardHistory();
+    void loadColorHistory();
+  }, [loadDefaultSettings, loadClipboardHistory, loadColorHistory]);
+
+  // 监听后端剪贴板变化事件，自动刷新历史
+  useEffect(() => {
+    const unlisten = listen("clipboard-changed", () => {
+      void loadClipboardHistory();
+    });
+    return () => {
+      void unlisten.then((dispose) => dispose());
+    };
+  }, [loadClipboardHistory]);
 
   const checkBackend = useCallback(async () => {
     await runBusy(async () => {
@@ -210,6 +404,77 @@ export function App() {
     }
   };
 
+  const persistSettings = useCallback(
+    (nextSettings: AppSettings, message = "设置已自动保存。", immediate = false) => {
+      if (!nextSettings.outputTxt && !nextSettings.outputJson) {
+        setLog("请至少选择一种输出格式。");
+        return;
+      }
+
+      const serialized = JSON.stringify(nextSettings);
+      if (persistedSettingsJsonRef.current === serialized) {
+        return;
+      }
+      if (!immediate && queuedSettingsJsonRef.current === serialized) {
+        return;
+      }
+
+      pendingSettingsSaveRef.current = { message, serialized, settings: nextSettings };
+      queuedSettingsJsonRef.current = serialized;
+
+      const flushPendingSettings = () => {
+        if (settingsSaveTimerRef.current !== null) {
+          window.clearTimeout(settingsSaveTimerRef.current);
+          settingsSaveTimerRef.current = null;
+        }
+
+        const pending = pendingSettingsSaveRef.current;
+        if (!pending) return;
+        pendingSettingsSaveRef.current = null;
+        if (persistedSettingsJsonRef.current === pending.serialized) {
+          if (queuedSettingsJsonRef.current === pending.serialized) {
+            queuedSettingsJsonRef.current = "";
+          }
+          return;
+        }
+
+        const saveTask = settingsSaveChainRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            await invoke("save_app_settings", { settings: pending.settings });
+            persistedSettingsJsonRef.current = pending.serialized;
+            if (queuedSettingsJsonRef.current === pending.serialized) {
+              queuedSettingsJsonRef.current = "";
+            }
+            // 快捷键需要通知后端重新注册才能生效；其他设置项在前端状态中即时读取。
+            void registerShortcuts(pending.settings.shortcutBindings);
+            // 剪贴板历史容量和轮询开关也需同步到后端
+            void syncClipboardConfig(pending.settings);
+            setLog(pending.message);
+          })
+          .catch((error) => {
+            if (queuedSettingsJsonRef.current === pending.serialized) {
+              queuedSettingsJsonRef.current = "";
+            }
+            setLog(`保存设置失败: ${error instanceof Error ? error.message : String(error)}`);
+          });
+
+        settingsSaveChainRef.current = saveTask.then(() => undefined).catch(() => undefined);
+      };
+
+      if (immediate) {
+        flushPendingSettings();
+        return;
+      }
+
+      if (settingsSaveTimerRef.current !== null) {
+        window.clearTimeout(settingsSaveTimerRef.current);
+      }
+      settingsSaveTimerRef.current = window.setTimeout(flushPendingSettings, settingsSaveDebounceMs);
+    },
+    [registerShortcuts, syncClipboardConfig],
+  );
+
   const chooseOutputDir = async () => {
     try {
       const selected = await open({
@@ -218,26 +483,26 @@ export function App() {
       });
 
       if (typeof selected === "string") {
-        setSettings((current) => ({ ...current, outputDir: selected }));
-        setLog(`已选择存储目录: ${selected}`);
+        const nextSettings = { ...settings, outputDir: selected };
+        setSettings(nextSettings);
+        persistSettings(nextSettings, `已选择并保存存储目录: ${selected}`, true);
       }
     } catch (error) {
       setLog(`选择存储目录失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
-  const saveSettings = () => {
-    if (!settings.outputTxt && !settings.outputJson) {
-      setLog("请至少选择一种输出格式。");
-      return;
-    }
-    localStorage.setItem(settingsKey, JSON.stringify(settings));
-    setLog("设置已保存。");
-  };
-
   const resetSettings = async () => {
     await runBusy(async () => {
-      localStorage.removeItem(settingsKey);
+      await invoke("clear_app_settings");
+      clearLegacySavedSettings();
+      persistedSettingsJsonRef.current = "";
+      pendingSettingsSaveRef.current = null;
+      queuedSettingsJsonRef.current = "";
+      if (settingsSaveTimerRef.current !== null) {
+        window.clearTimeout(settingsSaveTimerRef.current);
+        settingsSaveTimerRef.current = null;
+      }
       await loadDefaultSettings();
       setLog("已恢复默认设置。");
     });
@@ -251,8 +516,19 @@ export function App() {
 
     await runBusy(async () => {
       const nextResults: RecognitionFile[] = [];
-      setRecognizedFiles([]);
+      const previousResults = settings.clearOcrResultsBeforeRun ? [] : recognizedFiles;
+      setRecognizedFiles(previousResults);
       setProgress({ current: 0, total: selectedFiles.length });
+      let removedOutputCount = 0;
+
+      if (settings.clearOcrResultsBeforeRun) {
+        const response = await invoke<ClearOcrOutputResponse>("clear_ocr_output_dir", {
+          request: {
+            output_dir: settings.outputDir,
+          },
+        });
+        removedOutputCount = response.removed;
+      }
 
       for (const [index, filePath] of selectedFiles.entries()) {
         try {
@@ -289,32 +565,243 @@ export function App() {
             message: error instanceof Error ? error.message : String(error),
           });
         }
-        setRecognizedFiles([...nextResults]);
+        setRecognizedFiles([...previousResults, ...nextResults]);
         setProgress({ current: index + 1, total: selectedFiles.length });
       }
 
-      setLog(`本次处理完成: ${nextResults.length} 个文件。`);
+      const clearMessage = settings.clearOcrResultsBeforeRun
+        ? `，已清理 ${removedOutputCount} 个旧输出文件`
+        : "";
+      setLog(`本次处理完成: ${nextResults.length} 个文件${clearMessage}。`);
       setProgress(null);
     });
   };
 
+  const runScreenshotOcrPayload = async (imagePath?: string, engine?: OcrEngine, language?: string) => {
+    const response = await invoke<ScreenshotOcrResponse>("run_screenshot_ocr", {
+      request: {
+        image_path: imagePath,
+        output_dir: settings.outputDir,
+        ocr_engine: engine ?? settings.ocrEngine,
+        dpi: settings.dpi,
+        lang: language ?? settings.lang,
+        force_ocr: settings.forceOcr,
+      },
+    });
+
+    await invoke("open_ocr_result_window", {
+      request: {
+        image_path: response.image_path,
+        recognized_text: response.recognized_text,
+        items: response.items,
+        language: response.language,
+        engine: response.engine,
+        source: response.source,
+      },
+    }).catch(() => undefined);
+    setLog(response.recognized_text ? "截图 OCR 识别完成。" : "截图 OCR 完成，但未识别到文本。");
+  };
+
+  const captureScreenshot = async () => {
+    await runBusy(async () => {
+      const response = await invoke<ScreenshotResponse>("capture_region", {
+        request: {
+          output_dir: settings.screenshotOutputDir || undefined,
+        },
+      });
+      setScreenshot(response);
+      setLog(response.message);
+      if (settings.screenshotAutoOcr) {
+        await runScreenshotOcrPayload(response.image_path);
+      }
+    });
+  };
+
+  const saveCurrentScreenshot = async () => {
+    if (!screenshot) return;
+    await runBusy(async () => {
+      const response = await invoke<SaveScreenshotResponse>("save_screenshot", {
+        request: {
+          source_path: screenshot.image_path,
+          output_dir: settings.screenshotOutputDir || settings.outputDir || undefined,
+        },
+      });
+      setLog(`截图已保存: ${response.image_path}`);
+    });
+  };
+
+  const copyCurrentScreenshot = async () => {
+    if (!screenshot) return;
+    await runBusy(async () => {
+      await invoke("copy_screenshot", {
+        request: {
+          image_path: screenshot.image_path,
+        },
+      });
+      setLog("截图已复制到剪贴板。");
+    });
+  };
+
+  const runOcrForCurrentScreenshot = async () => {
+    if (!screenshot) return;
+    await runBusy(async () => {
+      await runScreenshotOcrPayload(screenshot.image_path);
+    });
+  };
+
+  const changeTranslationEngine = useCallback(
+    (translationEngine: TranslationEngine) => {
+      const nextSettings = { ...settings, translationEngine };
+      setSettings(nextSettings);
+      persistSettings(nextSettings, `已切换默认翻译引擎: ${translationEngineLabels[translationEngine]}`, true);
+    },
+    [persistSettings, settings],
+  );
+
+  const translateText = async (text: string, preferredEngine = settings.translationEngine) => {
+    const engine = resolveTranslationEngine(settings, preferredEngine);
+    if (!engine) {
+      throw new Error("请先在设置中启用至少一个翻译引擎。");
+    }
+    const response = await invoke<TranslateResponse>("translate_text", {
+      request: {
+        text,
+        engine,
+        api_base_url: settings.translationApiBaseUrl,
+        api_key: settings.translationApiKey,
+        model: settings.translationModel,
+        volc_access_key: settings.translationVolcAccessKey,
+        volc_secret_key: settings.translationVolcSecretKey,
+      },
+    });
+    await writeClipboardText(response.translated_text, "translation", false);
+    return response.translated_text;
+  };
+
+  const translateTextWithLog = async (text: string, preferredEngine: TranslationEngine) => {
+    try {
+      setLog("正在翻译...");
+      const translated = await translateText(text, preferredEngine);
+      setLog("翻译完成。");
+      return translated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLog(message);
+      throw error;
+    }
+  };
+
+  const writeClipboardText = async (text: string, source: ClipboardSource = "manual", announce = true) => {
+    await invoke("write_clipboard_text", {
+      request: { text, source },
+    });
+    // 写入后立即刷新历史（Rust 侧已同步入 DB，避免等下一次轮询）
+    await loadClipboardHistory();
+    if (announce) {
+      setLog("文本已复制到剪贴板。");
+    }
+  };
+
+  const readCurrentClipboard = async () => {
+    await runBusy(async () => {
+      const response = await invoke<ClipboardTextResponse>("read_clipboard_text");
+      if (response.text.trim()) {
+        // 走 write_clipboard_text 让 Rust 统一入库；source=clipboard 表示来自系统剪贴板
+        await invoke("write_clipboard_text", {
+          request: { text: response.text, source: "clipboard" },
+        });
+        await loadClipboardHistory();
+      }
+      setLog(response.text.trim() ? "已读取当前剪贴板文本。" : "当前剪贴板没有文本。");
+    });
+  };
+
+  const clearClipboardHistory = async () => {
+    try {
+      await invoke("clear_clipboard_history");
+      await loadClipboardHistory();
+      setLog("剪贴板历史已清空。");
+    } catch (error) {
+      setLog(`清空剪贴板历史失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const deleteClipboardItem = async (id: string) => {
+    try {
+      await invoke("delete_clipboard_item", { id });
+      setClipboardHistory((current) => current.filter((item) => item.id !== id));
+    } catch (error) {
+      setLog(`删除剪贴板记录失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const toggleClipboardPinned = async (id: string, pinned: boolean) => {
+    try {
+      await invoke("set_clipboard_pinned", { id, pinned });
+      setClipboardHistory((current) =>
+        current.map((item) => (item.id === id ? { ...item, pinned } : item)),
+      );
+    } catch (error) {
+      setLog(`更新置顶失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const useClipboardItem = async (id: string) => {
+    try {
+      await invoke("use_clipboard_item", { request: { id } });
+      await loadClipboardHistory();
+      setLog("已放入系统剪贴板，可直接粘贴。");
+    } catch (error) {
+      setLog(`使用剪贴板记录失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const sampleColor = async () => {
+    await runBusy(async () => {
+      const color = await invoke<ColorSampleResponse>("sample_screen_color");
+      setRecentColors((current) => {
+        const next = [color, ...current.filter((item) => item.hex !== color.hex)].slice(0, settings.colorHistoryLimit);
+        void invoke("save_color_history", { history: next }).catch((error) => {
+          setLog(`保存取色历史失败: ${error instanceof Error ? error.message : String(error)}`);
+        });
+        return next;
+      });
+      await writeClipboardText(colorValue(color, settings.colorCopyFormat), "manual", false);
+      setLog(`已取色: ${color.hex}`);
+    });
+  };
+
+  const copyColor = async (color: ColorSampleResponse, format = settings.colorCopyFormat as ColorCopyFormat) => {
+    await writeClipboardText(colorValue(color, format), "manual");
+  };
+
   const title = useMemo(() => {
     if (view === "settings") return "系统设置";
-    return "墨识 OCR";
+    return "墨识";
   }, [view]);
 
   return (
     <section className={view === "settings" ? "shell stack-page settings-shell" : "shell stack-page"}>
       <header className="topbar">
         <div>
+          <p className="eyebrow">本地识别与快捷工具箱</p>
           <h1>{title}</h1>
         </div>
         <nav className="nav-actions">
           <AppButton active={view === "ocr"} disabled={busy} onClick={() => setView("ocr")}>
-            识别
+            OCR
+          </AppButton>
+          <AppButton active={view === "translate"} disabled={busy} onClick={() => setView("translate")}>
+            翻译
+          </AppButton>
+          <AppButton active={view === "clipboard"} disabled={busy} onClick={() => setView("clipboard")}>
+            剪贴板
+          </AppButton>
+          <AppButton active={view === "color"} disabled={busy} onClick={() => setView("color")}>
+            取色
           </AppButton>
           <AppButton active={view === "settings"} disabled={busy} onClick={() => setView("settings")}>
-            系统设置
+            设置
           </AppButton>
         </nav>
       </header>
@@ -333,6 +820,39 @@ export function App() {
         />
       )}
 
+      {view === "translate" && (
+        <TranslatePage
+          busy={busy}
+          enabledEngines={enabledTranslationEngines(settings)}
+          engine={resolveTranslationEngine(settings) ?? settings.translationEngine}
+          onCopyText={writeClipboardText}
+          onEngineChange={changeTranslationEngine}
+          onTranslate={translateTextWithLog}
+        />
+      )}
+
+      {view === "clipboard" && (
+        <ClipboardPage
+          busy={busy}
+          history={clipboardHistory}
+          onClear={clearClipboardHistory}
+          onDelete={deleteClipboardItem}
+          onReadCurrent={readCurrentClipboard}
+          onTogglePinned={toggleClipboardPinned}
+          onUseItem={useClipboardItem}
+        />
+      )}
+
+      {view === "color" && (
+        <ColorPage
+          busy={busy}
+          copyFormat={settings.colorCopyFormat}
+          onCopyColor={copyColor}
+          onSampleColor={sampleColor}
+          recentColors={recentColors}
+        />
+      )}
+
       {view === "settings" && (
         <SettingsPage
           busy={busy}
@@ -341,8 +861,10 @@ export function App() {
           onCheckBackend={checkBackend}
           onChooseOutputDir={chooseOutputDir}
           onInstallExtension={installExtension}
+          onPersistSettings={(nextSettings, immediate) =>
+            persistSettings(nextSettings, "设置已自动保存。", immediate)
+          }
           onResetSettings={resetSettings}
-          onSaveSettings={saveSettings}
           onUninstallExtension={uninstallExtension}
           onUpdateSettings={setSettings}
           resolvedTheme={resolvedTheme}
@@ -354,4 +876,27 @@ export function App() {
       {confirmDialog}
     </section>
   );
+}
+
+function readLocalArray<T>(key: string): T[] {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function removeLocalValue(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // 只用于旧 localStorage 数据迁移，失败时不影响 SQLite 主存储。
+  }
+}
+
+function colorValue(color: ColorSampleResponse, format: ColorCopyFormat) {
+  if (format === "rgb") return color.rgb;
+  if (format === "hsl") return color.hsl;
+  return color.hex;
 }

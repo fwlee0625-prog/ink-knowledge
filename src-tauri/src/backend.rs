@@ -5,7 +5,10 @@ use std::{
     process::Command,
 };
 
-use crate::commands::{BackendStatus, DefaultSettings, OcrRequest, OcrResponse, ScanFilesRequest};
+use crate::commands::{
+    BackendStatus, ClearOcrOutputRequest, ClearOcrOutputResponse, DefaultSettings, OcrRequest,
+    OcrResponse, ScanFilesRequest,
+};
 use crate::paths::app_data_dir;
 use tauri::Manager;
 
@@ -65,7 +68,7 @@ pub fn get_default_settings(app: tauri::AppHandle) -> Result<DefaultSettings, St
         .path()
         .document_dir()
         .map_err(|error| format!("无法获取文稿目录: {error}"))?;
-    let output_dir = documents_dir.join("墨识 OCR");
+    let output_dir = documents_dir.join("墨识").join("OCR");
     fs::create_dir_all(&output_dir).map_err(|error| format!("创建默认存储目录失败: {error}"))?;
 
     Ok(DefaultSettings {
@@ -106,13 +109,7 @@ pub fn run_ocr(app: tauri::AppHandle, request: OcrRequest) -> Result<OcrResponse
         return Err(format!("输入文件不存在: {}", input.display()));
     }
 
-    let output_dir = request
-        .output_dir
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| app_data.join("output"));
+    let output_dir = resolve_ocr_output_dir(&app_data, request.output_dir.as_deref());
     fs::create_dir_all(&output_dir).map_err(|error| error.to_string())?;
 
     let dpi = request.dpi.unwrap_or(300).to_string();
@@ -181,6 +178,53 @@ pub fn run_ocr(app: tauri::AppHandle, request: OcrRequest) -> Result<OcrResponse
         payload,
         stdout,
     })
+}
+
+pub fn clear_ocr_output_dir(
+    app: tauri::AppHandle,
+    request: ClearOcrOutputRequest,
+) -> Result<ClearOcrOutputResponse, String> {
+    let app_data = app_data_dir(&app)?;
+    let output_dir = resolve_ocr_output_dir(&app_data, request.output_dir.as_deref());
+    if !output_dir.exists() {
+        return Ok(ClearOcrOutputResponse { removed: 0 });
+    }
+    if !output_dir.is_dir() {
+        return Err(format!("OCR 存储路径不是文件夹: {}", output_dir.display()));
+    }
+
+    let mut removed = 0;
+    let entries = fs::read_dir(&output_dir)
+        .map_err(|error| format!("读取 OCR 存储目录失败 {}: {error}", output_dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("读取 OCR 存储目录条目失败: {error}"))?;
+        let path = entry.path();
+        let metadata = entry
+            .metadata()
+            .map_err(|error| format!("读取 OCR 输出文件信息失败 {}: {error}", path.display()))?;
+        if metadata.is_file() && is_ocr_output_file(&path) {
+            fs::remove_file(&path)
+                .map_err(|error| format!("删除 OCR 输出文件失败 {}: {error}", path.display()))?;
+            removed += 1;
+        }
+    }
+
+    Ok(ClearOcrOutputResponse { removed })
+}
+
+fn resolve_ocr_output_dir(app_data: &Path, output_dir: Option<&str>) -> PathBuf {
+    output_dir
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| app_data.join("output"))
+}
+
+fn is_ocr_output_file(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    matches!(extension.to_ascii_lowercase().as_str(), "txt" | "json")
 }
 
 fn normalize_output_format(value: Option<&str>) -> Result<&'static str, String> {

@@ -6,8 +6,23 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tauri::Manager;
 
+pub use crate::clipboard_repo::{ClipboardHistoryItem, ClipboardRepoConfig};
 pub use crate::extensions::{ExtensionInfo, InstallExtensionRequest, UninstallExtensionRequest};
+pub use crate::shortcuts::ShortcutBindings;
+pub use crate::{
+    clipboard::{ClipboardTextResponse, ClipboardWriteRequest},
+    color_picker::ColorSampleResponse,
+    native_capture::{NativeCaptureRequest, NativeCaptureResponse},
+    ocr_result_window::{OcrResultWindowPayload, OcrResultWindowRequest, OcrResultWindowResponse},
+    screenshot::{
+        CaptureRequest, CopyScreenshotRequest, SaveScreenshotRequest, SaveScreenshotResponse,
+        ScreenshotResponse,
+    },
+    screenshot_ocr::{ScreenshotOcrRequest, ScreenshotOcrResponse},
+    translation::{TranslateRequest, TranslateResponse},
+};
 
 #[derive(Debug, Serialize)]
 pub struct BackendStatus {
@@ -26,6 +41,16 @@ pub struct OcrRequest {
     pub dpi: Option<u16>,
     pub lang: Option<String>,
     pub force_ocr: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClearOcrOutputRequest {
+    pub output_dir: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ClearOcrOutputResponse {
+    pub removed: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +84,11 @@ pub struct DefaultSettings {
     pub output_txt: bool,
     pub output_json: bool,
     pub recursion_depth: u8,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClipboardUseItemRequest {
+    pub id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -101,8 +131,41 @@ pub async fn run_ocr(app: tauri::AppHandle, request: OcrRequest) -> Result<OcrRe
 }
 
 #[tauri::command]
+pub async fn clear_ocr_output_dir(
+    app: tauri::AppHandle,
+    request: ClearOcrOutputRequest,
+) -> Result<ClearOcrOutputResponse, String> {
+    run_blocking(move || crate::backend::clear_ocr_output_dir(app, request)).await
+}
+
+#[tauri::command]
 pub async fn get_default_settings(app: tauri::AppHandle) -> Result<DefaultSettings, String> {
     run_blocking(move || crate::backend::get_default_settings(app)).await
+}
+
+#[tauri::command]
+pub async fn load_app_settings(app: tauri::AppHandle) -> Result<Option<Value>, String> {
+    run_blocking(move || crate::settings_repo::load_app_settings(app)).await
+}
+
+#[tauri::command]
+pub async fn save_app_settings(app: tauri::AppHandle, settings: Value) -> Result<(), String> {
+    run_blocking(move || crate::settings_repo::save_app_settings(app, settings)).await
+}
+
+#[tauri::command]
+pub async fn clear_app_settings(app: tauri::AppHandle) -> Result<(), String> {
+    run_blocking(move || crate::settings_repo::clear_app_settings(app)).await
+}
+
+#[tauri::command]
+pub async fn load_color_history(app: tauri::AppHandle) -> Result<Option<Value>, String> {
+    run_blocking(move || crate::settings_repo::load_color_history(app)).await
+}
+
+#[tauri::command]
+pub async fn save_color_history(app: tauri::AppHandle, history: Value) -> Result<(), String> {
+    run_blocking(move || crate::settings_repo::save_color_history(app, history)).await
 }
 
 #[tauri::command]
@@ -123,6 +186,230 @@ pub async fn open_result_file(request: ResultFileRequest) -> Result<(), String> 
 #[tauri::command]
 pub async fn reveal_result_file(request: ResultFileRequest) -> Result<(), String> {
     run_blocking(move || reveal_path(PathBuf::from(request.path))).await
+}
+
+#[tauri::command]
+pub async fn capture_region(
+    app: tauri::AppHandle,
+    request: CaptureRequest,
+) -> Result<ScreenshotResponse, String> {
+    run_blocking(move || crate::native_capture::capture_native_region(app, request.output_dir))
+        .await
+}
+
+#[tauri::command]
+pub async fn save_screenshot(
+    app: tauri::AppHandle,
+    request: SaveScreenshotRequest,
+) -> Result<SaveScreenshotResponse, String> {
+    run_blocking(move || crate::screenshot::save_screenshot(app, request)).await
+}
+
+#[tauri::command]
+pub async fn copy_screenshot(request: CopyScreenshotRequest) -> Result<(), String> {
+    run_blocking(move || crate::screenshot::copy_screenshot(request)).await
+}
+
+#[tauri::command]
+pub async fn run_screenshot_ocr(
+    app: tauri::AppHandle,
+    request: ScreenshotOcrRequest,
+) -> Result<ScreenshotOcrResponse, String> {
+    run_blocking(move || crate::screenshot_ocr::run_screenshot_ocr(app, request)).await
+}
+
+#[tauri::command]
+pub async fn open_ocr_result_window(
+    app: tauri::AppHandle,
+    request: OcrResultWindowRequest,
+) -> Result<OcrResultWindowResponse, String> {
+    run_blocking(move || crate::ocr_result_window::open_ocr_result_window(&app, request)).await
+}
+
+#[tauri::command]
+pub async fn get_pending_ocr_result() -> Result<Option<OcrResultWindowPayload>, String> {
+    run_blocking(crate::ocr_result_window::pending_ocr_result).await
+}
+
+#[tauri::command]
+pub async fn translate_text(request: TranslateRequest) -> Result<TranslateResponse, String> {
+    run_blocking(move || crate::translation::translate_text(request)).await
+}
+
+#[tauri::command]
+pub async fn read_clipboard_text() -> Result<ClipboardTextResponse, String> {
+    run_blocking(crate::clipboard::read_clipboard_text).await
+}
+
+#[tauri::command]
+pub async fn write_clipboard_text(
+    app: tauri::AppHandle,
+    request: ClipboardWriteRequest,
+) -> Result<(), String> {
+    run_blocking(move || {
+        crate::clipboard::write_clipboard_text(request.clone())?;
+        // 同步写入剪贴板历史 DB（source 来自前端，默认 manual）
+        let state = app.state::<crate::native_pasteboard::PasteboardState>();
+        let text = request.text.trim().to_string();
+        if text.is_empty() {
+            return Ok(());
+        }
+        let item = ClipboardHistoryItem {
+            id: format!(
+                "manual-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0)
+            ),
+            kind: "text".to_string(),
+            text: Some(text),
+            image_path: None,
+            paths: None,
+            size_bytes: None,
+            mime_type: Some("text/plain".to_string()),
+            is_dir: None,
+            file_count: None,
+            source: request.source.unwrap_or_else(|| "manual".to_string()),
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis().to_string())
+                .unwrap_or_else(|_| "0".to_string()),
+            pinned: false,
+            expired: false,
+        };
+        state.repo.insert(item)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn use_clipboard_item(
+    app: tauri::AppHandle,
+    request: ClipboardUseItemRequest,
+) -> Result<(), String> {
+    run_blocking(move || {
+        let state = app.state::<crate::native_pasteboard::PasteboardState>();
+        let item = state
+            .repo
+            .get(request.id.trim())?
+            .ok_or_else(|| "剪贴板记录不存在。".to_string())?;
+
+        match item.kind.as_str() {
+            "text" => {
+                let text = item.text.as_deref().unwrap_or("").to_string();
+                if text.trim().is_empty() {
+                    return Err("这条文本记录为空，无法使用。".to_string());
+                }
+                crate::clipboard::write_clipboard_text(ClipboardWriteRequest {
+                    text,
+                    source: Some("clipboard".to_string()),
+                })?;
+            }
+            "image" => {
+                let path = item
+                    .image_path
+                    .as_deref()
+                    .ok_or_else(|| "这条图片记录没有可使用的图片路径。".to_string())?;
+                crate::clipboard::write_clipboard_image(Path::new(path))?;
+            }
+            "files" => {
+                let paths = item
+                    .paths
+                    .as_ref()
+                    .ok_or_else(|| "这条文件记录没有可使用的路径。".to_string())?;
+                crate::clipboard::write_clipboard_files(paths)?;
+            }
+            _ => return Err("暂不支持使用这类剪贴板记录。".to_string()),
+        }
+
+        state.repo.touch(&item.id, &unix_millis_string())?;
+        state.suppress_next_change();
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn list_clipboard_history(
+    app: tauri::AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<ClipboardHistoryItem>, String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    let limit = limit.unwrap_or(500);
+    state.repo.list(limit)
+}
+
+#[tauri::command]
+pub async fn delete_clipboard_item(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.repo.delete(&id)
+}
+
+#[tauri::command]
+pub async fn clear_clipboard_history(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.repo.clear_all()
+}
+
+#[tauri::command]
+pub async fn set_clipboard_pinned(
+    app: tauri::AppHandle,
+    id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.repo.set_pinned(&id, pinned)
+}
+
+#[tauri::command]
+pub async fn refresh_clipboard_expired(app: tauri::AppHandle) -> Result<usize, String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.repo.refresh_expired()
+}
+
+#[tauri::command]
+pub async fn set_clipboard_polling(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.set_polling(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_clipboard_config(
+    app: tauri::AppHandle,
+    config: ClipboardRepoConfig,
+) -> Result<(), String> {
+    let state = app.state::<crate::native_pasteboard::PasteboardState>();
+    state.update_config(config);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sample_screen_color(app: tauri::AppHandle) -> Result<ColorSampleResponse, String> {
+    run_blocking(move || crate::color_picker::sample_screen_color(app)).await
+}
+
+#[tauri::command]
+pub async fn start_native_capture(
+    app: tauri::AppHandle,
+    request: NativeCaptureRequest,
+) -> Result<NativeCaptureResponse, String> {
+    run_blocking(move || crate::native_capture::start_native_capture(app, request)).await
+}
+
+#[tauri::command]
+pub async fn get_default_shortcut_bindings() -> Result<ShortcutBindings, String> {
+    Ok(crate::shortcuts::default_bindings())
+}
+
+#[tauri::command]
+pub async fn register_shortcuts(
+    app: tauri::AppHandle,
+    bindings: ShortcutBindings,
+) -> Result<(), String> {
+    // register_all 只调用快捷键和菜单 API，本身不会阻塞；直接在命令线程执行即可。
+    crate::shortcuts::register_all(&app, &bindings)
 }
 
 async fn run_blocking<T, F>(task: F) -> Result<T, String>
@@ -179,6 +466,13 @@ fn read_result_preview(request: ResultFileRequest) -> Result<ResultPreview, Stri
         size,
         truncated,
     })
+}
+
+fn unix_millis_string() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis().to_string())
+        .unwrap_or_else(|_| "0".to_string())
 }
 
 fn file_name(path: &Path) -> String {
