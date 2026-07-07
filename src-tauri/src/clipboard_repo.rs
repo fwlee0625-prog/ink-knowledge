@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::paths::app_data_dir;
@@ -42,10 +42,79 @@ impl Default for ClipboardRepoConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn insert_test_item(conn: &Connection, id: &str, created_at: &str, pinned: bool) {
+        conn.execute(
+            "INSERT INTO clipboard_items
+                (id, kind, source, created_at, pinned, expired)
+             VALUES (?1, 'text', 'clipboard', ?2, ?3, 0)",
+            params![id, created_at, if pinned { 1 } else { 0 }],
+        )
+        .unwrap();
+    }
+
+    fn insert_test_image_item(conn: &Connection, id: &str, image_path: &Path) {
+        conn.execute(
+            "INSERT INTO clipboard_items
+                (id, kind, image_path, source, created_at, pinned, expired)
+             VALUES (?1, 'image', ?2, 'clipboard', '2026-01-01T00:00:00Z', 0, 0)",
+            params![id, image_path.display().to_string()],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn prune_keeps_pinned_and_latest_unpinned_items() {
+        let conn = Connection::open_in_memory().unwrap();
+        ClipboardRepo::run_migrations(&conn).unwrap();
+        insert_test_item(&conn, "pinned-old", "2026-01-01T00:00:00Z", true);
+        insert_test_item(&conn, "old", "2026-01-02T00:00:00Z", false);
+        insert_test_item(&conn, "newer", "2026-01-03T00:00:00Z", false);
+        insert_test_item(&conn, "newest", "2026-01-04T00:00:00Z", false);
+
+        ClipboardRepo::prune_with_conn(&conn, 2).unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT id FROM clipboard_items ORDER BY pinned DESC, created_at DESC")
+            .unwrap();
+        let ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(ids, vec!["pinned-old", "newest", "newer"]);
+    }
+
+    #[test]
+    fn cleanup_unreferenced_images_keeps_referenced_files() {
+        let conn = Connection::open_in_memory().unwrap();
+        ClipboardRepo::run_migrations(&conn).unwrap();
+        let image_dir =
+            std::env::temp_dir().join(format!("moshi-clipboard-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&image_dir);
+        std::fs::create_dir_all(&image_dir).unwrap();
+        let referenced = image_dir.join("referenced.png");
+        let orphan = image_dir.join("orphan.png");
+        std::fs::write(&referenced, b"referenced").unwrap();
+        std::fs::write(&orphan, b"orphan").unwrap();
+        insert_test_image_item(&conn, "image-1", &referenced);
+
+        ClipboardRepo::cleanup_unreferenced_images_with_conn(&conn, &image_dir).unwrap();
+
+        assert!(referenced.exists());
+        assert!(!orphan.exists());
+        let _ = std::fs::remove_dir_all(&image_dir);
+    }
+}
+
 /// 单例 DB 句柄。Mutex 包裹保证多线程安全。
 pub struct ClipboardRepo {
     conn: Mutex<Connection>,
     config: Mutex<ClipboardRepoConfig>,
+    image_dir: PathBuf,
 }
 
 impl ClipboardRepo {
@@ -61,13 +130,19 @@ impl ClipboardRepo {
         Ok(Self {
             conn: Mutex::new(conn),
             config: Mutex::new(ClipboardRepoConfig::default()),
+            image_dir: dir.join("clipboard-images"),
         })
     }
 
-    pub fn set_config(&self, config: ClipboardRepoConfig) {
+    pub fn set_config(&self, config: ClipboardRepoConfig) -> Result<(), String> {
+        let max_items = config.max_items;
         if let Ok(mut guard) = self.config.lock() {
             *guard = config;
+        } else {
+            return Err("锁剪贴板配置失败".to_string());
         }
+        self.prune(max_items)?;
+        self.cleanup_unreferenced_images()
     }
 
     fn run_migrations(conn: &Connection) -> Result<(), String> {
@@ -155,11 +230,43 @@ impl ClipboardRepo {
 
         // 裁剪：保留所有 pinned 项 + 未 pinned 中最新的 max_items 条
         let max_items = self.config.lock().map(|c| c.max_items).unwrap_or(100);
+        let image_paths = Self::prune_with_conn(&conn, max_items)?;
+        Self::remove_image_files(image_paths);
+
+        Ok(())
+    }
+
+    pub fn prune(&self, max_items: usize) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
+        let image_paths = Self::prune_with_conn(&conn, max_items)?;
+        Self::remove_image_files(image_paths);
+        Ok(())
+    }
+
+    fn prune_with_conn(conn: &Connection, max_items: usize) -> Result<Vec<String>, String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT image_path FROM clipboard_items
+                 WHERE pinned = 0
+                   AND image_path IS NOT NULL
+                   AND id NOT IN (
+                     SELECT id FROM clipboard_items
+                     WHERE pinned = 0
+                     ORDER BY created_at DESC
+                     LIMIT ?1
+                 )",
+            )
+            .map_err(|e| format!("准备裁剪图片查询失败: {e}"))?;
+        let image_paths = stmt
+            .query_map(params![max_items as i64], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("查询待裁剪图片失败: {e}"))?
+            .filter_map(|row| row.ok())
+            .collect::<Vec<_>>();
+
         conn.execute(
             "DELETE FROM clipboard_items
-             WHERE id NOT IN (
-                 SELECT id FROM clipboard_items WHERE pinned = 1
-                 UNION
+             WHERE pinned = 0
+               AND id NOT IN (
                  SELECT id FROM clipboard_items
                  WHERE pinned = 0
                  ORDER BY created_at DESC
@@ -167,8 +274,74 @@ impl ClipboardRepo {
              )",
             params![max_items as i64],
         )
-        .ok();
+        .map_err(|e| format!("裁剪剪贴板历史失败: {e}"))?;
+        Ok(image_paths)
+    }
 
+    fn remove_image_files(paths: Vec<String>) {
+        for path in paths {
+            let _ = std::fs::remove_file(PathBuf::from(path));
+        }
+    }
+
+    pub fn cleanup_unreferenced_images(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
+        Self::cleanup_unreferenced_images_with_conn(&conn, &self.image_dir)
+    }
+
+    pub fn is_empty(&self) -> Result<bool, String> {
+        let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .map_err(|e| format!("查询剪贴板记录数量失败: {e}"))?;
+        Ok(count == 0)
+    }
+
+    fn cleanup_unreferenced_images_with_conn(
+        conn: &Connection,
+        image_dir: &Path,
+    ) -> Result<(), String> {
+        if !image_dir.exists() {
+            return Ok(());
+        }
+
+        let mut stmt = conn
+            .prepare("SELECT image_path FROM clipboard_items WHERE image_path IS NOT NULL")
+            .map_err(|e| format!("准备图片引用查询失败: {e}"))?;
+        let referenced = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("查询图片引用失败: {e}"))?
+            .filter_map(|row| row.ok())
+            .map(PathBuf::from)
+            .collect::<std::collections::HashSet<_>>();
+
+        let entries = std::fs::read_dir(image_dir)
+            .map_err(|e| format!("读取剪贴板图片缓存失败 {}: {e}", image_dir.display()))?;
+        for entry in entries {
+            let path = entry
+                .map_err(|e| format!("读取剪贴板图片缓存条目失败: {e}"))?
+                .path();
+            if path.is_file() && !referenced.contains(&path) {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+        Ok(())
+    }
+
+    fn remove_all_images_in_dir(image_dir: &Path) -> Result<(), String> {
+        if !image_dir.exists() {
+            return Ok(());
+        }
+        let entries = std::fs::read_dir(image_dir)
+            .map_err(|e| format!("读取剪贴板图片缓存失败 {}: {e}", image_dir.display()))?;
+        for entry in entries {
+            let path = entry
+                .map_err(|e| format!("读取剪贴板图片缓存条目失败: {e}"))?
+                .path();
+            if path.is_file() {
+                let _ = std::fs::remove_file(path);
+            }
+        }
         Ok(())
     }
 
@@ -308,11 +481,15 @@ impl ClipboardRepo {
             .map_err(|e| format!("查询失败: {e}"))?
             .filter_map(|r| r.ok())
             .collect();
-        for path in image_paths {
-            let _ = std::fs::remove_file(PathBuf::from(path));
-        }
+        drop(stmt);
         conn.execute("DELETE FROM clipboard_items", [])
             .map_err(|e| format!("清空记录失败: {e}"))?;
+        conn.execute_batch(
+            "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);",
+        )
+        .map_err(|e| format!("压缩剪贴板数据库失败: {e}"))?;
+        Self::remove_image_files(image_paths);
+        Self::remove_all_images_in_dir(&self.image_dir)?;
         Ok(())
     }
 

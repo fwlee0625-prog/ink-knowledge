@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 enum CaptureAction: String {
     case save
+    case saveAs
     case copy
     case ocr
     case cancel
@@ -115,8 +116,8 @@ struct CaptureArguments {
                 guard let action = CaptureAction(rawValue: args[index]) else {
                     throw CaptureError.message("不支持的默认动作: \(args[index])。")
                 }
-                guard action != .cancel else {
-                    throw CaptureError.message("--default-action 不支持 cancel。")
+                guard action != .cancel, action != .saveAs else {
+                    throw CaptureError.message("--default-action 不支持 \(args[index])。")
                 }
                 defaultAction = action
             default:
@@ -409,7 +410,16 @@ final class CaptureCoordinator: NSObject {
     private func finishCapture(action: CaptureAction, image: CGImage, selection: CGRect, marks: [CaptureMark]) {
         do {
             let finalImage = try renderFinalImage(baseImage: image, marks: marks, selection: selection)
-            let imagePath = try writePNG(image: finalImage)
+            let imagePath: URL
+            if action == .saveAs {
+                guard let target = chooseSaveAsURL(defaultFileName: "capture-\(timestampMillis()).png") else {
+                    finishPayload(["action": CaptureAction.cancel.rawValue])
+                    return
+                }
+                imagePath = try writePNG(image: finalImage, to: target)
+            } else {
+                imagePath = try writePNG(image: finalImage)
+            }
 
             if action == .copy {
                 copyPNGToPasteboard(image: finalImage)
@@ -679,15 +689,32 @@ final class CaptureCoordinator: NSObject {
         )
     }
 
-    private func writePNG(image: CGImage) throws -> URL {
-        try FileManager.default.createDirectory(at: args.outputDir, withIntermediateDirectories: true)
-        let path = args.outputDir.appendingPathComponent("capture-\(timestampMillis()).png")
+    private func writePNG(image: CGImage, to path: URL? = nil) throws -> URL {
+        let target: URL
+        if let path {
+            target = path
+            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } else {
+            target = args.outputDir.appendingPathComponent("capture-\(timestampMillis()).png")
+            try FileManager.default.createDirectory(at: args.outputDir, withIntermediateDirectories: true)
+        }
         let bitmap = NSBitmapImageRep(cgImage: image)
         guard let data = bitmap.representation(using: .png, properties: [:]) else {
             throw CaptureError.message("生成 PNG 失败。")
         }
-        try data.write(to: path, options: .atomic)
-        return path
+        try data.write(to: target, options: .atomic)
+        return target
+    }
+
+    private func chooseSaveAsURL(defaultFileName: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.title = "保存截图"
+        panel.nameFieldStringValue = defaultFileName
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.allowedContentTypes = [.png]
+        NSApp.activate(ignoringOtherApps: true)
+        return panel.runModal() == .OK ? panel.url : nil
     }
 
     private func copyPNGToPasteboard(image: CGImage) {
@@ -787,9 +814,12 @@ final class CaptureOverlayView: NSView {
     private var textField: NSTextField?
     private var textFieldLocalPoint: CGPoint?
     private var trackingArea: NSTrackingArea?
+    private var hoveredToolbarButtonIndex: Int?
     private let markColor = NSColor.systemRed
     private let markLineWidth: CGFloat = 3
     private let minimumSelectionSize: CGFloat = 8
+    private let selectionHandleVisualSize: CGFloat = 10
+    private let selectionHandleHitSize: CGFloat = 14
     private let toolbarItems: [ToolbarItem] = [
         .tool(.rect),
         .tool(.ellipse),
@@ -798,8 +828,7 @@ final class CaptureOverlayView: NSView {
         .tool(.text),
         .undo,
         .action(.ocr),
-        .action(.copy),
-        .action(.save),
+        .action(.saveAs),
         .action(.cancel),
         .confirm,
     ]
@@ -845,10 +874,13 @@ final class CaptureOverlayView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        updateCursor(at: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        updateToolbarHover(at: point)
+        updateCursor(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
+        updateToolbarHover(at: nil)
         NSCursor.arrow.set()
     }
 
@@ -856,6 +888,11 @@ final class CaptureOverlayView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         if let hit = toolbarAction(at: point) {
             handleToolbarHit(hit)
+            return
+        }
+        if isToolbarArea(at: point) {
+            updateToolbarHover(at: point)
+            NSCursor.arrow.set()
             return
         }
 
@@ -1074,11 +1111,16 @@ final class CaptureOverlayView: NSView {
 
         for (index, item) in toolbarItems.enumerated() {
             let button = buttonRect(at: index, in: toolbar)
+            let background = buttonBackgroundRect(for: button)
             let isCancel = isCancelItem(item)
             let isActive = isActiveTool(item)
+            if hoveredToolbarButtonIndex == index {
+                NSColor.black.withAlphaComponent(0.07).setFill()
+                NSBezierPath(roundedRect: background, xRadius: 5, yRadius: 5).fill()
+            }
             if isActive {
                 NSColor.systemYellow.withAlphaComponent(0.18).setFill()
-                NSBezierPath(roundedRect: button, xRadius: 5, yRadius: 5).fill()
+                NSBezierPath(roundedRect: background, xRadius: 5, yRadius: 5).fill()
             }
             drawToolbarIcon(item, in: button, isActive: isActive, isCancel: isCancel)
         }
@@ -1107,6 +1149,30 @@ final class CaptureOverlayView: NSView {
         return nil
     }
 
+    private func toolbarButtonIndex(at point: CGPoint) -> Int? {
+        guard let selection, selection.width >= minimumSelectionSize, selection.height >= minimumSelectionSize else {
+            return nil
+        }
+        let toolbar = toolbarRect(for: selection)
+        guard toolbar.contains(point) else { return nil }
+        return toolbarItems.indices.first { buttonRect(at: $0, in: toolbar).contains(point) }
+    }
+
+    private func isToolbarArea(at point: CGPoint) -> Bool {
+        guard let selection, selection.width >= minimumSelectionSize, selection.height >= minimumSelectionSize else {
+            return false
+        }
+        return toolbarRect(for: selection).contains(point)
+    }
+
+    private func updateToolbarHover(at point: CGPoint?) {
+        let nextIndex = point.flatMap { toolbarButtonIndex(at: $0) }
+        if hoveredToolbarButtonIndex != nextIndex {
+            hoveredToolbarButtonIndex = nextIndex
+            needsDisplay = true
+        }
+    }
+
     private func toolbarRect(for selection: CGRect) -> CGRect {
         let width = min(CGFloat(560), max(CGFloat(320), bounds.width - 24))
         let height: CGFloat = 44
@@ -1121,9 +1187,19 @@ final class CaptureOverlayView: NSView {
         let width = (toolbar.width - gap * CGFloat(toolbarItems.count + 1)) / CGFloat(toolbarItems.count)
         return CGRect(
             x: toolbar.minX + gap + CGFloat(index) * (width + gap),
-            y: toolbar.minY + 7,
+            y: toolbar.minY + 8,
             width: width,
-            height: toolbar.height - 14
+            height: toolbar.height - 16
+        )
+    }
+
+    private func buttonBackgroundRect(for button: CGRect) -> CGRect {
+        let side = min(button.width, button.height)
+        return CGRect(
+            x: button.midX - side / 2,
+            y: button.midY - side / 2,
+            width: side,
+            height: side
         )
     }
 
@@ -1136,7 +1212,7 @@ final class CaptureOverlayView: NSView {
         case .action(let action):
             coordinator?.finish(action: action, selection: selection, screen: screen, marks: marks)
         case .confirm:
-            coordinator?.finish(action: defaultAction ?? .save, selection: selection, screen: screen, marks: marks)
+            coordinator?.finish(action: .copy, selection: selection, screen: screen, marks: marks)
         }
         needsDisplay = true
     }
@@ -1166,6 +1242,7 @@ final class CaptureOverlayView: NSView {
     private func startNewSelection(at point: CGPoint) {
         dragStart = point
         selection = CGRect(origin: point, size: .zero)
+        hoveredToolbarButtonIndex = nil
         isSelecting = true
         isMovingSelection = false
         isResizingSelection = false
@@ -1397,6 +1474,9 @@ final class CaptureOverlayView: NSView {
         if toolbarAction(at: point) != nil {
             return .pointingHand
         }
+        if isToolbarArea(at: point) {
+            return .arrow
+        }
         guard let selection, selection.width >= minimumSelectionSize, selection.height >= minimumSelectionSize else {
             return .crosshair
         }
@@ -1474,24 +1554,32 @@ final class CaptureOverlayView: NSView {
     }
 
     private func selectionHandle(at point: CGPoint, in rect: CGRect) -> SelectionHandle? {
-        SelectionHandle.allCases.first { handleRect(for: $0, in: rect).contains(point) }
+        SelectionHandle.allCases.first { handleHitRect(for: $0, in: rect).contains(point) }
     }
 
     private func drawSelectionHandles(for rect: CGRect) {
         NSColor.white.setFill()
         NSColor.systemBlue.setStroke()
         for handle in SelectionHandle.allCases {
-            let circle = NSBezierPath(ovalIn: handleRect(for: handle, in: rect))
-            circle.lineWidth = 3
+            let circle = NSBezierPath(ovalIn: handleVisualRect(for: handle, in: rect))
+            circle.lineWidth = 2
             circle.fill()
             circle.stroke()
         }
     }
 
-    private func handleRect(for handle: SelectionHandle, in rect: CGRect) -> CGRect {
+    private func handleVisualRect(for handle: SelectionHandle, in rect: CGRect) -> CGRect {
         let point = handlePoint(for: handle, in: rect)
-        let size: CGFloat = 14
-        return CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+        return centeredRect(at: point, size: selectionHandleVisualSize)
+    }
+
+    private func handleHitRect(for handle: SelectionHandle, in rect: CGRect) -> CGRect {
+        let point = handlePoint(for: handle, in: rect)
+        return centeredRect(at: point, size: selectionHandleHitSize)
+    }
+
+    private func centeredRect(at point: CGPoint, size: CGFloat) -> CGRect {
+        CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
     }
 
     private func handlePoint(for handle: SelectionHandle, in rect: CGRect) -> CGPoint {
@@ -1613,7 +1701,7 @@ final class CaptureOverlayView: NSView {
 
     private func drawActionIcon(_ action: CaptureAction, in rect: CGRect, color: NSColor) {
         switch action {
-        case .save:
+        case .save, .saveAs:
             drawDownloadIcon(in: rect, color: color)
         case .copy:
             drawCopyIcon(in: rect, color: color)
@@ -1808,7 +1896,7 @@ struct CaptureServiceRequest {
 
         let defaultAction: CaptureAction?
         if let actionText = raw["defaultAction"] as? String, !actionText.isEmpty {
-            guard let action = CaptureAction(rawValue: actionText), action != .cancel else {
+            guard let action = CaptureAction(rawValue: actionText), action != .cancel, action != .saveAs else {
                 throw CaptureError.message("service 请求包含不支持的默认动作: \(actionText)。")
             }
             defaultAction = action

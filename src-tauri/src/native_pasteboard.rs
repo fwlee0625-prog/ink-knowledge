@@ -62,8 +62,8 @@ impl PasteboardState {
         self.polling_enabled.load(Ordering::Relaxed)
     }
 
-    pub fn update_config(&self, config: ClipboardRepoConfig) {
-        self.repo.set_config(config);
+    pub fn update_config(&self, config: ClipboardRepoConfig) -> Result<(), String> {
+        self.repo.set_config(config)
     }
 
     pub fn suppress_next_change(&self) {

@@ -3,13 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
-import { OcrResultDialog } from "./OcrResultDialog";
+import { OcrResultContent } from "./OcrResultContent";
+import { PinIcon } from "./OcrResultIcons";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
 import type {
   AppSettings,
-  OcrDialogData,
   OcrEngine,
   OcrItem,
+  OcrResultData,
   ScreenshotOcrResponse,
   TranslateResponse,
   TranslationEngine,
@@ -28,7 +29,7 @@ function normalizeSource(source: unknown): "screenshot" | "screenshotOcr" | "fil
   return source === "screenshot" || source === "screenshotOcr" || source === "fileOcr" ? source : "screenshotOcr";
 }
 
-function mapPayload(payload: OcrResultWindowPayload): OcrDialogData {
+function mapPayload(payload: OcrResultWindowPayload): OcrResultData {
   return {
     imagePath: payload.image_path,
     recognizedText: payload.recognized_text,
@@ -39,7 +40,7 @@ function mapPayload(payload: OcrResultWindowPayload): OcrDialogData {
   };
 }
 
-function mapOcrResponse(response: ScreenshotOcrResponse): OcrDialogData {
+function mapOcrResponse(response: ScreenshotOcrResponse): OcrResultData {
   return {
     imagePath: response.image_path,
     recognizedText: response.recognized_text,
@@ -65,8 +66,9 @@ function resolveTranslationEngine(settings: AppSettings): TranslationEngine | nu
 }
 
 export function OcrResultWindow() {
-  const [data, setData] = useState<OcrDialogData | null>(null);
+  const [data, setData] = useState<OcrResultData | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
   const currentWindow = useMemo(() => getCurrentWindow(), []);
 
@@ -98,20 +100,21 @@ export function OcrResultWindow() {
     };
   }, []);
 
-  // ESC 关闭窗口：放在顶层，确保 data 为 null 时也能响应
+  // ESC 关闭窗口：使用捕获阶段，避免下拉、输入框等控件先拦截事件。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" || event.code === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         void currentWindow.close();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [currentWindow]);
 
   useEffect(() => {
-    if (!settings.ocrResultAutoCloseOnBlur) {
+    if (!settings.ocrResultAutoCloseOnBlur || pinned) {
       return;
     }
 
@@ -155,7 +158,7 @@ export function OcrResultWindow() {
       }
       void unlistenPromise.then((unlisten) => unlisten());
     };
-  }, [currentWindow, settings.ocrResultAutoCloseOnBlur]);
+  }, [currentWindow, pinned, settings.ocrResultAutoCloseOnBlur]);
 
   useEffect(() => {
     void invoke<OcrResultWindowPayload | null>("get_pending_ocr_result").then((payload) => {
@@ -218,10 +221,6 @@ export function OcrResultWindow() {
     return response.translated_text;
   };
 
-  const handleClose = () => {
-    void currentWindow.close();
-  };
-
   const handleStartDrag = () => {
     void currentWindow.startDragging();
   };
@@ -232,7 +231,7 @@ export function OcrResultWindow() {
     }
 
     const target = event.target as HTMLElement | null;
-    if (target?.closest("button, select, input, textarea, a, [role='button'], .ocr-dialog-controls")) {
+    if (target?.closest("button, select, input, textarea, a, [role='button'], .ocr-result-controls")) {
       return;
     }
 
@@ -240,35 +239,46 @@ export function OcrResultWindow() {
     handleStartDrag();
   };
 
-  // data 还没加载时显示 loading 框，避免白屏且支持 ESC/关闭按钮
+  // data 还没加载时也渲染真实窗口壳，避免白屏并保留 header 原生拖拽。
   if (!data) {
     return (
-      <div className="ocr-dialog-backdrop" role="presentation">
-        <section aria-label="截图 OCR 识别结果" className="ocr-dialog" role="dialog">
-          <header className="ocr-dialog-toolbar" onMouseDown={handleLoadingToolbarMouseDown}>
-            <div className="ocr-dialog-pin">
-              图
-            </div>
-            <div className="ocr-dialog-drag-spacer" />
-            <div className="ocr-dialog-controls" />
+      <main className="ocr-result-window">
+        <section aria-label="截图 OCR 识别结果" className="ocr-result-shell">
+          <header className="ocr-result-toolbar" onMouseDown={handleLoadingToolbarMouseDown}>
+            <button
+              aria-label={pinned ? "取消固定 OCR 结果窗口" : "固定 OCR 结果窗口"}
+              aria-pressed={pinned}
+              className={pinned ? "ocr-pin-button active" : "ocr-pin-button"}
+              onClick={() => setPinned((current) => !current)}
+              title={pinned ? "取消固定" : "固定窗口"}
+              type="button"
+            >
+              <PinIcon className="ocr-result-icon" />
+            </button>
+            <div className="ocr-result-drag-spacer" />
+            <div className="ocr-result-controls" />
           </header>
-          <div className="ocr-dialog-body">
-            <div className="ocr-dialog-loading">正在加载 OCR 结果…</div>
+          <div className="ocr-result-body">
+            <div className="ocr-result-loading">正在加载 OCR 结果…</div>
           </div>
         </section>
-      </div>
+      </main>
     );
   }
 
   return (
-    <OcrResultDialog
-      busy={busy}
-      data={data}
-      onClose={handleClose}
-      onCopyText={copyText}
-      onRerun={rerun}
-      onRetranslate={translate}
-      onStartDrag={handleStartDrag}
-    />
+    <main className="ocr-result-window">
+      <OcrResultContent
+        busy={busy}
+        data={data}
+        engine={settings.ocrEngine}
+        pinned={pinned}
+        onCopyText={copyText}
+        onPinnedChange={setPinned}
+        onRerun={rerun}
+        onRetranslate={translate}
+        onStartDrag={handleStartDrag}
+      />
+    </main>
   );
 }

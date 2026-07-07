@@ -11,6 +11,9 @@ use tauri::Manager;
 pub use crate::clipboard_repo::{ClipboardHistoryItem, ClipboardRepoConfig};
 pub use crate::extensions::{ExtensionInfo, InstallExtensionRequest, UninstallExtensionRequest};
 pub use crate::shortcuts::ShortcutBindings;
+pub use crate::storage::{
+    ClearStorageCacheRequest, ClearStorageCacheResponse, StorageUsageRequest, StorageUsageResponse,
+};
 pub use crate::{
     clipboard::{ClipboardTextResponse, ClipboardWriteRequest},
     native_capture::{NativeCaptureRequest, NativeCaptureResponse},
@@ -371,8 +374,7 @@ pub async fn update_clipboard_config(
     config: ClipboardRepoConfig,
 ) -> Result<(), String> {
     let state = app.state::<crate::native_pasteboard::PasteboardState>();
-    state.update_config(config);
-    Ok(())
+    state.update_config(config)
 }
 
 #[tauri::command]
@@ -395,6 +397,22 @@ pub async fn register_shortcuts(
 ) -> Result<(), String> {
     // register_all 只调用快捷键和菜单 API，本身不会阻塞；直接在命令线程执行即可。
     crate::shortcuts::register_all(&app, &bindings)
+}
+
+#[tauri::command]
+pub async fn get_storage_usage(
+    app: tauri::AppHandle,
+    request: StorageUsageRequest,
+) -> Result<StorageUsageResponse, String> {
+    run_blocking(move || crate::storage::collect_storage_usage(app, request)).await
+}
+
+#[tauri::command]
+pub async fn clear_storage_cache(
+    app: tauri::AppHandle,
+    request: ClearStorageCacheRequest,
+) -> Result<ClearStorageCacheResponse, String> {
+    run_blocking(move || crate::storage::clear_storage_cache(app, request)).await
 }
 
 async fn run_blocking<T, F>(task: F) -> Result<T, String>

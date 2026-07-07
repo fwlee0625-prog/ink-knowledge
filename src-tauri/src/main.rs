@@ -11,6 +11,7 @@ mod screenshot;
 mod screenshot_ocr;
 mod settings_repo;
 mod shortcuts;
+mod storage;
 mod translation;
 mod tray;
 
@@ -60,12 +61,14 @@ pub fn run() {
             commands::clear_app_settings,
             commands::clear_clipboard_history,
             commands::clear_ocr_output_dir,
+            commands::clear_storage_cache,
             commands::copy_screenshot,
             commands::delete_clipboard_item,
             commands::install_extension_from_dir,
             commands::get_default_settings,
             commands::get_default_shortcut_bindings,
             commands::get_pending_ocr_result,
+            commands::get_storage_usage,
             commands::load_app_settings,
             commands::list_clipboard_history,
             commands::list_extensions,

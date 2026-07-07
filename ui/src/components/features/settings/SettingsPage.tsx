@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { AppButton, Card, SegmentedControl, ShortcutInput, Toggle } from "../../ui";
-import { clampNumber } from "../../../lib/format";
+import { clampNumber, formatBytes } from "../../../lib/format";
 import { defaultShortcutBindings } from "../../../lib/settings";
 import type {
   AppSettings,
   BackendStatus,
+  ClearStorageCacheResponse,
   ExtensionInfo,
   OcrEngine,
   SettingsCategory,
+  StorageUsageResponse,
   ThemePreference,
   TranslationEngine,
 } from "../../../types";
@@ -55,6 +58,7 @@ const sections: Array<{ id: SettingsCategory; label: string; description: string
   { id: "translation", label: "翻译", description: "API 和语言偏好" },
   { id: "screenshot", label: "截图", description: "保存目录和 OCR 快捷行为" },
   { id: "clipboard", label: "剪贴板", description: "文本、图片和文件历史" },
+  { id: "storage", label: "缓存管理", description: "查看占用并清理缓存" },
   { id: "shortcuts", label: "快捷键", description: "全局快捷键绑定" },
   { id: "backend", label: "后端与扩展", description: "状态检查和 OCR 扩展" },
   { id: "about", label: "关于", description: "版本与权限说明" },
@@ -78,6 +82,12 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsCategory>("general");
   const [activeTranslationEngine, setActiveTranslationEngine] = useState<TranslationEngine>(settings.translationEngine);
+  const [storageUsage, setStorageUsage] = useState<StorageUsageResponse | null>(null);
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState("");
+  const [storageMessage, setStorageMessage] = useState("");
+  const [cacheSelectionMode, setCacheSelectionMode] = useState(false);
+  const [selectedCacheIds, setSelectedCacheIds] = useState<string[]>([]);
   const draftSettingsRef = useRef(settings);
 
   useEffect(() => {
@@ -94,6 +104,67 @@ export function SettingsPage({
   const saveDraftSettings = () => {
     onPersistSettings(draftSettingsRef.current, true);
   };
+
+  const loadStorageUsage = async (preserveMessage = false) => {
+    setStorageLoading(true);
+    setStorageError("");
+    if (!preserveMessage) {
+      setStorageMessage("");
+    }
+    try {
+      const response = await invoke<StorageUsageResponse>("get_storage_usage", {
+        request: {
+          output_dir: settings.outputDir || undefined,
+          screenshot_output_dir: settings.screenshotOutputDir || undefined,
+        },
+      });
+      setStorageUsage(response);
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const toggleCacheId = (id: string, checked: boolean) => {
+    setSelectedCacheIds((current) =>
+      checked ? Array.from(new Set([...current, id])) : current.filter((item) => item !== id),
+    );
+  };
+
+  const clearSelectedCache = async () => {
+    if (selectedCacheIds.length === 0) {
+      setStorageError("请先选择要清理的缓存。");
+      return;
+    }
+
+    setStorageLoading(true);
+    setStorageError("");
+    setStorageMessage("");
+    try {
+      const response = await invoke<ClearStorageCacheResponse>("clear_storage_cache", {
+        request: {
+          ids: selectedCacheIds,
+          output_dir: settings.outputDir || undefined,
+          screenshot_output_dir: settings.screenshotOutputDir || undefined,
+        },
+      });
+      setStorageMessage(`已清理 ${response.cleared_ids.length} 项，释放 ${formatBytes(response.removed_bytes)}。`);
+      setSelectedCacheIds([]);
+      setCacheSelectionMode(false);
+      await loadStorageUsage(true);
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === "storage") {
+      void loadStorageUsage();
+    }
+  }, [activeSection, settings.outputDir, settings.screenshotOutputDir]);
 
   return (
     <Card className="settings-panel settings-layout" variant="page">
@@ -443,6 +514,91 @@ export function SettingsPage({
           </SettingsSection>
         )}
 
+        {activeSection === "storage" && (
+          <SettingsSection
+            description="查看 OCR、截图、剪贴板和模型缓存占用，并按需清理。"
+            title="缓存管理"
+          >
+            <div className="storage-summary">
+              <div>
+                <span>总占用</span>
+                <strong>{formatBytes(storageUsage?.total_bytes ?? 0)}</strong>
+                <small>
+                  {storageUsage ? `统计于 ${formatStorageTimestamp(storageUsage.generated_at)}` : "等待统计"}
+                </small>
+              </div>
+              <AppButton disabled={storageLoading} onClick={() => loadStorageUsage()} variant="primary">
+                {storageLoading ? "统计中..." : "刷新"}
+              </AppButton>
+            </div>
+            {storageError && <div className="storage-error">{storageError}</div>}
+            {storageMessage && <div className="storage-message">{storageMessage}</div>}
+            <div className="storage-list">
+              {(storageUsage?.items ?? []).map((item) => (
+                <article className="storage-item" key={item.id}>
+                  <div className="storage-item-main">
+                    <div className="storage-item-title">
+                      {cacheSelectionMode && (
+                        <input
+                          aria-label={`选择清理${item.label}`}
+                          checked={selectedCacheIds.includes(item.id)}
+                          disabled={storageLoading || !item.exists || item.file_count === 0}
+                          onChange={(event) => toggleCacheId(item.id, event.target.checked)}
+                          type="checkbox"
+                        />
+                      )}
+                      <strong>{item.label}</strong>
+                      <span>{item.description}</span>
+                    </div>
+                    <b>{formatBytes(item.size_bytes)}</b>
+                  </div>
+                  <div className="storage-item-meta">
+                    <span>{item.exists ? `${item.file_count} 个文件` : "路径尚未创建"}</span>
+                    <small title={item.path}>{item.path || "-"}</small>
+                  </div>
+                </article>
+              ))}
+              {!storageUsage && !storageLoading && !storageError && (
+                <div className="storage-empty">点击刷新查看本机存储占用。</div>
+              )}
+            </div>
+            <div className="storage-actions">
+              {!cacheSelectionMode ? (
+                <AppButton
+                  disabled={storageLoading || !storageUsage || storageUsage.items.length === 0}
+                  onClick={() => {
+                    setCacheSelectionMode(true);
+                    setStorageError("");
+                    setStorageMessage("");
+                  }}
+                >
+                  清理缓存
+                </AppButton>
+              ) : (
+                <>
+                  <AppButton
+                    disabled={storageLoading}
+                    onClick={() => {
+                      setCacheSelectionMode(false);
+                      setSelectedCacheIds([]);
+                      setStorageError("");
+                    }}
+                  >
+                    取消
+                  </AppButton>
+                  <AppButton
+                    disabled={storageLoading || selectedCacheIds.length === 0}
+                    onClick={clearSelectedCache}
+                    variant="primary"
+                  >
+                    清空已选缓存
+                  </AppButton>
+                </>
+              )}
+            </div>
+          </SettingsSection>
+        )}
+
         {activeSection === "shortcuts" && (
           <SettingsSection
             description="全局快捷键在主窗口隐藏时也能触发。点击输入框后按下组合键即可绑定；按 Esc 取消，按 Backspace 清除。"
@@ -742,6 +898,12 @@ function ShortcutRow({
       <ShortcutInput onChange={onChange} value={value} />
     </SettingRow>
   );
+}
+
+function formatStorageTimestamp(value: string) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "-";
+  return new Date(timestamp).toLocaleString("zh-CN", { hour12: false });
 }
 
 function SettingRow({

@@ -15,6 +15,19 @@ export function fileName(path: string) {
   return path.split(/[\\/]/).pop() || path;
 }
 
+export function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const fractionDigits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(fractionDigits)} ${units[unitIndex]}`;
+}
+
 export function outputFileName(response: OcrResponse, fallbackPath: string) {
   const names = [response.txt_path, response.json_path].filter(Boolean).map((path) => fileName(path as string));
   return names.length > 0 ? names.join(" / ") : fileName(fallbackPath);

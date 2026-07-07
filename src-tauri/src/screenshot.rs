@@ -86,32 +86,6 @@ end run
     }
 }
 
-pub fn interactive_capture_to_path(path: &Path) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("创建截图目录失败: {error}"))?;
-    }
-
-    let output = Command::new("screencapture")
-        .arg("-i")
-        .arg(path)
-        .output()
-        .map_err(|error| format!("启动系统截图失败: {error}"))?;
-
-    if output.status.success() && path.exists() {
-        return Ok(());
-    }
-
-    if !path.exists() {
-        return Err("已取消截图或没有生成截图。".to_string());
-    }
-
-    Err(format!(
-        "截图失败: {}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    ))
-}
-
 pub fn screenshot_output_dir(
     app: &tauri::AppHandle,
     output_dir: Option<&str>,

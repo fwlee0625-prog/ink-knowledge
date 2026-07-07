@@ -98,6 +98,12 @@ pub fn pending_ocr_result() -> Result<Option<OcrResultWindowPayload>, String> {
     Ok(guard.clone())
 }
 
+pub fn restore_close_shortcut_if_open(app: &tauri::AppHandle) {
+    if app.get_webview_window(OCR_RESULT_WINDOW_LABEL).is_some() {
+        register_close_shortcut(app);
+    }
+}
+
 fn store_pending_result(request: OcrResultWindowRequest) -> Result<(), String> {
     let mut guard = pending_store()
         .lock()

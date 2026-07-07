@@ -429,6 +429,7 @@ fn message_for_action(action: &str) -> String {
         "copy" => "截图已复制到剪贴板。".to_string(),
         "ocr" => "截图 OCR 识别完成。".to_string(),
         "save" => "截图已保存。".to_string(),
+        "saveAs" => "截图已另存为。".to_string(),
         _ => "截图完成。".to_string(),
     }
 }

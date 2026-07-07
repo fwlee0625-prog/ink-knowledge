@@ -50,6 +50,28 @@ export type ResultPreview = {
   truncated: boolean;
 };
 
+export type StorageUsageItem = {
+  id: string;
+  label: string;
+  description: string;
+  path: string;
+  size_bytes: number;
+  file_count: number;
+  exists: boolean;
+};
+
+export type StorageUsageResponse = {
+  total_bytes: number;
+  items: StorageUsageItem[];
+  generated_at: string;
+};
+
+export type ClearStorageCacheResponse = {
+  cleared_ids: string[];
+  removed_bytes: number;
+  removed_files: number;
+};
+
 export type OcrEngine = "paddle" | "apple-vision";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -116,6 +138,7 @@ export type SettingsCategory =
   | "translation"
   | "screenshot"
   | "clipboard"
+  | "storage"
   | "shortcuts"
   | "backend"
   | "about";
@@ -200,7 +223,7 @@ export type ClipboardRepoConfig = {
   max_items: number;
 };
 
-export type OcrDialogData = {
+export type OcrResultData = {
   imagePath: string;
   recognizedText: string;
   items: OcrItem[];
