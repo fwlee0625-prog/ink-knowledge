@@ -130,7 +130,7 @@ export type DefaultSettings = {
   recursion_depth: number;
 };
 
-export type View = "ocr" | "translate" | "clipboard" | "settings";
+export type View = "ocr" | "clipboard" | "settings";
 
 export type SettingsCategory =
   | "general"

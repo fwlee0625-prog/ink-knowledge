@@ -24,6 +24,7 @@ pub use crate::{
     },
     screenshot_ocr::{ScreenshotOcrRequest, ScreenshotOcrResponse},
     translation::{TranslateRequest, TranslateResponse},
+    translation_window::TranslationWindowResponse,
 };
 
 #[derive(Debug, Serialize)]
@@ -222,6 +223,13 @@ pub async fn open_ocr_result_window(
 #[tauri::command]
 pub async fn get_pending_ocr_result() -> Result<Option<OcrResultWindowPayload>, String> {
     run_blocking(crate::ocr_result_window::pending_ocr_result).await
+}
+
+#[tauri::command]
+pub async fn open_translation_window(
+    app: tauri::AppHandle,
+) -> Result<TranslationWindowResponse, String> {
+    run_blocking(move || crate::translation_window::open_translation_window(&app)).await
 }
 
 #[tauri::command]

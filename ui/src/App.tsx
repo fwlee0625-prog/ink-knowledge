@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardPage } from "./components/features/clipboard/ClipboardPage";
 import { OcrPage } from "./components/features/ocr/OcrPage";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
-import { TranslatePage } from "./components/features/translate/TranslatePage";
 import { AppButton, useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
 import {
@@ -33,19 +32,11 @@ import type {
   ShortcutBindings,
   ScreenshotOcrResponse,
   ScreenshotResponse,
-  TranslateResponse,
-  TranslationEngine,
   View,
 } from "./types";
 
 const settingsSaveDebounceMs = 500;
 
-const translationEngineLabels: Record<TranslationEngine, string> = {
-  "openai-compatible": "OpenAI 兼容",
-  volcengine: "火山翻译",
-};
-
-type ClipboardSource = "manual" | "ocr" | "translation" | "clipboard";
 type PendingSettingsSave = {
   message: string;
   serialized: string;
@@ -55,28 +46,9 @@ type PendingSettingsSave = {
 type TrayOpenView = View | "screenshot" | "screenshotOcr";
 
 function normalizeTrayView(view: TrayOpenView): View {
-  return view === "ocr" || view === "translate" || view === "clipboard" || view === "settings"
+  return view === "ocr" || view === "clipboard" || view === "settings"
     ? view
     : "ocr";
-}
-
-function isTranslationEngineEnabled(settings: AppSettings, engine: TranslationEngine) {
-  if (engine === "openai-compatible") return settings.translationOpenaiEnabled;
-  return settings.translationVolcEnabled;
-}
-
-function enabledTranslationEngines(settings: AppSettings) {
-  return (Object.keys(translationEngineLabels) as TranslationEngine[])
-    .filter((engine) => isTranslationEngineEnabled(settings, engine))
-    .map((engine) => ({ label: translationEngineLabels[engine], value: engine }));
-}
-
-function resolveTranslationEngine(settings: AppSettings, preferredEngine = settings.translationEngine) {
-  if (isTranslationEngineEnabled(settings, preferredEngine)) {
-    return preferredEngine;
-  }
-
-  return enabledTranslationEngines(settings)[0]?.value ?? null;
 }
 
 export function App() {
@@ -637,59 +609,6 @@ export function App() {
     });
   };
 
-  const changeTranslationEngine = useCallback(
-    (translationEngine: TranslationEngine) => {
-      const nextSettings = { ...settings, translationEngine };
-      setSettings(nextSettings);
-      persistSettings(nextSettings, `已切换默认翻译引擎: ${translationEngineLabels[translationEngine]}`, true);
-    },
-    [persistSettings, settings],
-  );
-
-  const translateText = async (text: string, preferredEngine = settings.translationEngine) => {
-    const engine = resolveTranslationEngine(settings, preferredEngine);
-    if (!engine) {
-      throw new Error("请先在设置中启用至少一个翻译引擎。");
-    }
-    const response = await invoke<TranslateResponse>("translate_text", {
-      request: {
-        text,
-        engine,
-        api_base_url: settings.translationApiBaseUrl,
-        api_key: settings.translationApiKey,
-        model: settings.translationModel,
-        volc_access_key: settings.translationVolcAccessKey,
-        volc_secret_key: settings.translationVolcSecretKey,
-      },
-    });
-    await writeClipboardText(response.translated_text, "translation", false);
-    return response.translated_text;
-  };
-
-  const translateTextWithLog = async (text: string, preferredEngine: TranslationEngine) => {
-    try {
-      setLog("正在翻译...");
-      const translated = await translateText(text, preferredEngine);
-      setLog("翻译完成。");
-      return translated;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setLog(message);
-      throw error;
-    }
-  };
-
-  const writeClipboardText = async (text: string, source: ClipboardSource = "manual", announce = true) => {
-    await invoke("write_clipboard_text", {
-      request: { text, source },
-    });
-    // 写入后立即刷新历史（Rust 侧已同步入 DB，避免等下一次轮询）
-    await loadClipboardHistory();
-    if (announce) {
-      setLog("文本已复制到剪贴板。");
-    }
-  };
-
   const readCurrentClipboard = async () => {
     await runBusy(async () => {
       const response = await invoke<ClipboardTextResponse>("read_clipboard_text");
@@ -760,9 +679,6 @@ export function App() {
           <AppButton active={view === "ocr"} disabled={busy} onClick={() => setView("ocr")}>
             OCR
           </AppButton>
-          <AppButton active={view === "translate"} disabled={busy} onClick={() => setView("translate")}>
-            翻译
-          </AppButton>
           <AppButton active={view === "clipboard"} disabled={busy} onClick={() => setView("clipboard")}>
             剪贴板
           </AppButton>
@@ -783,17 +699,6 @@ export function App() {
           progress={progress}
           recognizedFiles={recognizedFiles}
           selectedFiles={selectedFiles}
-        />
-      )}
-
-      {view === "translate" && (
-        <TranslatePage
-          busy={busy}
-          enabledEngines={enabledTranslationEngines(settings)}
-          engine={resolveTranslationEngine(settings) ?? settings.translationEngine}
-          onCopyText={writeClipboardText}
-          onEngineChange={changeTranslationEngine}
-          onTranslate={translateTextWithLog}
         />
       )}
 

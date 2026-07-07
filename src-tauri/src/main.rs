@@ -13,6 +13,7 @@ mod settings_repo;
 mod shortcuts;
 mod storage;
 mod translation;
+mod translation_window;
 mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,6 +75,7 @@ pub fn run() {
             commands::list_extensions,
             commands::open_result_file,
             commands::open_ocr_result_window,
+            commands::open_translation_window,
             commands::preview_result_file,
             commands::refresh_clipboard_expired,
             commands::register_shortcuts,

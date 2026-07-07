@@ -94,11 +94,28 @@ export function SettingsPage({
     draftSettingsRef.current = settings;
   }, [settings]);
 
+  useEffect(() => {
+    setActiveTranslationEngine(settings.translationEngine);
+  }, [settings.translationEngine]);
+
   const updateSettings = (updater: SettingsUpdater, immediate = false) => {
     const nextSettings = updater(draftSettingsRef.current);
     draftSettingsRef.current = nextSettings;
     onUpdateSettings(nextSettings);
     onPersistSettings(nextSettings, immediate);
+  };
+
+  const activateTranslationEngine = (translationEngine: TranslationEngine) => {
+    setActiveTranslationEngine(translationEngine);
+    updateSettings(
+      (current) => ({
+        ...current,
+        translationEngine,
+        translationOpenaiEnabled: translationEngine === "openai-compatible",
+        translationVolcEnabled: translationEngine === "volcengine",
+      }),
+      true,
+    );
   };
 
   const saveDraftSettings = () => {
@@ -306,7 +323,7 @@ export function SettingsPage({
 
         {activeSection === "translation" && (
           <SettingsSection
-            description="管理翻译引擎的启用状态、密钥和语言偏好；默认使用引擎在翻译页面选择。"
+            description="管理当前翻译引擎、密钥和语言偏好。"
             footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
             title="翻译"
           >
@@ -323,38 +340,20 @@ export function SettingsPage({
                     <button
                       className={active ? "translation-engine-card active" : "translation-engine-card"}
                       key={option.value}
-                      onClick={() => setActiveTranslationEngine(option.value)}
+                      onClick={() => activateTranslationEngine(option.value)}
                       type="button"
                     >
                       <span className="translation-engine-mark">{option.value === "volcengine" ? "火" : "AI"}</span>
                       <span>
                         <strong>{option.label}</strong>
                       </span>
-                      <b>{enabled ? "已启用" : "未启用"}</b>
+                      <b>{enabled ? "使用中" : "启用"}</b>
                     </button>
                   );
                 })}
               </div>
 
               <div className="settings-list translation-config-list">
-                <SettingRow description="关闭后该引擎不会出现在翻译页面的默认引擎选择中。" label="引擎启用">
-                  <Toggle
-                    checked={
-                      activeTranslationEngine === "openai-compatible"
-                        ? settings.translationOpenaiEnabled
-                        : settings.translationVolcEnabled
-                    }
-                    onChange={(event) =>
-                      updateSettings((current) =>
-                        activeTranslationEngine === "openai-compatible"
-                          ? { ...current, translationOpenaiEnabled: event.target.checked }
-                          : { ...current, translationVolcEnabled: event.target.checked },
-                      )
-                    }
-                  >
-                    启用
-                  </Toggle>
-                </SettingRow>
                 {activeTranslationEngine === "openai-compatible" && (
                   <>
                     <TextRow
@@ -640,7 +639,7 @@ export function SettingsPage({
                 value={settings.shortcutBindings.screenshotOcr}
               />
               <ShortcutRow
-                description="打开主窗口的翻译页面。"
+                description="打开独立翻译弹框。"
                 label="翻译"
                 onChange={(translation) =>
                   updateSettings((current) => ({

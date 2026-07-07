@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for the main OCR window and lightweight OCR result window.",
-  "windows": ["main", "ocr-result"],
+  "description": "Default permissions for the main window and lightweight tool result windows.",
+  "windows": ["main", "ocr-result", "translation"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

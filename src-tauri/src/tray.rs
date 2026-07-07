@@ -125,7 +125,7 @@ pub fn dispatch_action(app: &AppHandle, id: &str) {
         ACTION_OCR => open_view(app, "ocr"),
         ACTION_SCREENSHOT => start_native_capture(app, Some("save")),
         ACTION_SCREENSHOT_OCR => start_native_capture(app, Some("ocr")),
-        ACTION_TRANSLATION => open_view(app, "translate"),
+        ACTION_TRANSLATION => open_translation_window(app),
         ACTION_CLIPBOARD => open_view(app, "clipboard"),
         ACTION_SETTINGS => open_view(app, "settings"),
         _ => {}
@@ -198,6 +198,17 @@ fn show_capture_error(app: &AppHandle, message: String) {
         .kind(MessageDialogKind::Error)
         .buttons(MessageDialogButtons::Ok)
         .show(|_| {});
+}
+
+fn open_translation_window(app: &AppHandle) {
+    if let Err(error) = crate::translation_window::open_translation_window(app) {
+        app.dialog()
+            .message(error)
+            .title("翻译失败")
+            .kind(MessageDialogKind::Error)
+            .buttons(MessageDialogButtons::Ok)
+            .show(|_| {});
+    }
 }
 
 fn open_view(app: &AppHandle, view: &str) {

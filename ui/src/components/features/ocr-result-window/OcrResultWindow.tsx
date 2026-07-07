@@ -6,6 +6,7 @@ import type { MouseEvent } from "react";
 import { OcrResultContent } from "./OcrResultContent";
 import { PinIcon } from "./OcrResultIcons";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
+import { resolveTranslationEngine } from "../../../lib/translation";
 import type {
   AppSettings,
   OcrEngine,
@@ -13,7 +14,6 @@ import type {
   OcrResultData,
   ScreenshotOcrResponse,
   TranslateResponse,
-  TranslationEngine,
 } from "../../../types";
 
 type OcrResultWindowPayload = {
@@ -49,20 +49,6 @@ function mapOcrResponse(response: ScreenshotOcrResponse): OcrResultData {
     engine: response.engine,
     source: normalizeSource(response.source),
   };
-}
-
-function isTranslationEngineEnabled(settings: AppSettings, engine: TranslationEngine) {
-  if (engine === "openai-compatible") return settings.translationOpenaiEnabled;
-  return settings.translationVolcEnabled;
-}
-
-function resolveTranslationEngine(settings: AppSettings): TranslationEngine | null {
-  if (isTranslationEngineEnabled(settings, settings.translationEngine)) {
-    return settings.translationEngine;
-  }
-  if (settings.translationOpenaiEnabled) return "openai-compatible";
-  if (settings.translationVolcEnabled) return "volcengine";
-  return null;
 }
 
 export function OcrResultWindow() {

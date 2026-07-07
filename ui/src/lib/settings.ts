@@ -104,7 +104,23 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
       saved.translationEngine === "volcengine" ||
       Boolean(saved.translationVolcAccessKey || saved.translationVolcSecretKey);
   }
-  if (saved.translationEngine === "openai-compatible" && !saved.translationOpenaiEnabled && saved.translationVolcEnabled) {
+
+  if (!saved.translationOpenaiEnabled && !saved.translationVolcEnabled) {
+    if (saved.translationEngine === "volcengine") {
+      saved.translationVolcEnabled = true;
+    } else {
+      saved.translationOpenaiEnabled = true;
+    }
+  }
+  if (saved.translationOpenaiEnabled && saved.translationVolcEnabled) {
+    saved.translationOpenaiEnabled = saved.translationEngine === "openai-compatible";
+    saved.translationVolcEnabled = saved.translationEngine === "volcengine";
+  }
+  if (
+    saved.translationEngine === "openai-compatible" &&
+    !saved.translationOpenaiEnabled &&
+    saved.translationVolcEnabled
+  ) {
     saved.translationEngine = "volcengine";
   }
   if (saved.translationEngine === "volcengine" && !saved.translationVolcEnabled && saved.translationOpenaiEnabled) {
