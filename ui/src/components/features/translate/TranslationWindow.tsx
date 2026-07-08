@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { PinIcon, TranslateIcon } from "../ocr-result-window/OcrResultIcons";
 import { AppButton, useMessage } from "../../ui";
+import { useFloatingWindowAutoClose } from "../floating-window/useFloatingWindowAutoClose";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
 import { resolveTranslationEngine } from "../../../lib/translation";
 import type { AppSettings, TranslateResponse } from "../../../types";
@@ -25,6 +26,13 @@ export function TranslationWindow() {
   const currentWindow = useMemo(() => getCurrentWindow(), []);
   const message = useMessage();
   const selectedEngine = resolveTranslationEngine(settings);
+  const { closeWhenOutsideShell } = useFloatingWindowAutoClose({
+    autoCloseOnBlur: settings.ocrResultAutoCloseOnBlur,
+    currentWindow,
+    label: "translation",
+    pinned,
+    shellSelector: ".translation-window-shell",
+  });
 
   useEffect(() => {
     let disposed = false;
@@ -67,53 +75,6 @@ export function TranslationWindow() {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [currentWindow]);
-
-  useEffect(() => {
-    if (!settings.ocrResultAutoCloseOnBlur || pinned) {
-      return;
-    }
-
-    let hasBeenFocused = false;
-    let closeTimer: number | undefined;
-    let disposed = false;
-
-    void currentWindow.isFocused().then((focused) => {
-      if (!disposed && focused) {
-        hasBeenFocused = true;
-      }
-    });
-
-    const unlistenPromise = currentWindow.onFocusChanged(({ payload: focused }) => {
-      if (focused) {
-        hasBeenFocused = true;
-        if (closeTimer !== undefined) {
-          window.clearTimeout(closeTimer);
-          closeTimer = undefined;
-        }
-        return;
-      }
-
-      if (!hasBeenFocused) {
-        return;
-      }
-
-      closeTimer = window.setTimeout(() => {
-        void currentWindow.isFocused().then((stillFocused) => {
-          if (!stillFocused) {
-            void currentWindow.close();
-          }
-        });
-      }, 120);
-    });
-
-    return () => {
-      disposed = true;
-      if (closeTimer !== undefined) {
-        window.clearTimeout(closeTimer);
-      }
-      void unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [currentWindow, pinned, settings.ocrResultAutoCloseOnBlur]);
 
   const startWindowDrag = (event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0) {
@@ -177,7 +138,7 @@ export function TranslationWindow() {
   };
 
   return (
-    <main className="ocr-result-window translation-window">
+    <main className="ocr-result-window translation-window" onMouseDownCapture={closeWhenOutsideShell}>
       <section aria-label="翻译" className="ocr-result-shell translation-window-shell">
         <header className="ocr-result-toolbar translation-window-toolbar" onMouseDown={startWindowDrag}>
           <button

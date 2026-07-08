@@ -58,6 +58,10 @@ body,
   --dialog-backdrop: rgba(12, 18, 16, 0.42);
   --dialog-shadow-strong: rgba(12, 18, 16, 0.22);
   --dialog-shadow-soft: rgba(12, 18, 16, 0.12);
+  --floating-window-border: rgba(58, 76, 68, 0.34);
+  --floating-window-shadow:
+    0 22px 58px rgba(12, 18, 16, 0.24),
+    0 6px 18px rgba(12, 18, 16, 0.14);
   --scrollbar-size: 10px;
   --scrollbar-thumb: rgba(36, 91, 75, 0.28);
   --scrollbar-thumb-hover: rgba(36, 91, 75, 0.46);
@@ -101,6 +105,10 @@ body,
   --dialog-backdrop: rgba(3, 7, 5, 0.66);
   --dialog-shadow-strong: rgba(0, 0, 0, 0.42);
   --dialog-shadow-soft: rgba(0, 0, 0, 0.28);
+  --floating-window-border: rgba(179, 203, 192, 0.28);
+  --floating-window-shadow:
+    0 22px 58px rgba(0, 0, 0, 0.48),
+    0 6px 18px rgba(0, 0, 0, 0.32);
   --scrollbar-thumb: rgba(127, 193, 168, 0.34);
   --scrollbar-thumb-hover: rgba(127, 193, 168, 0.54);
   --scrollbar-thumb-active: rgba(127, 193, 168, 0.72);
@@ -150,7 +158,10 @@ body {
 :root[data-window="ocr-result"] #app,
 :root[data-window="translation"],
 :root[data-window="translation"] body,
-:root[data-window="translation"] #app {
+:root[data-window="translation"] #app,
+:root[data-window="clipboard"],
+:root[data-window="clipboard"] body,
+:root[data-window="clipboard"] #app {
   background: transparent;
 }
 
@@ -377,7 +388,9 @@ h2 {
 
 input,
 select {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   padding: 9px 10px;
   border: 1px solid $border;
@@ -1038,6 +1051,11 @@ pre.preview-content {
   min-height: 0;
 }
 
+.settings-shell {
+  padding-right: clamp(10px, 1.2vw, 20px);
+  padding-left: clamp(10px, 1.2vw, 20px);
+}
+
 .settings-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -1053,7 +1071,8 @@ pre.preview-content {
   gap: 8px;
   min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  padding-right: 14px;
+  scrollbar-gutter: stable;
 }
 
 .settings-nav-button {
@@ -1333,6 +1352,7 @@ pre.preview-content {
   border-radius: 8px;
   color: $text-soft;
   background: transparent;
+  cursor: pointer;
   text-align: left;
   transition:
     border-color 0.15s ease,
@@ -1346,6 +1366,11 @@ pre.preview-content {
 
   &:active {
     transform: scale(0.99);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
   }
 
   &.active {
@@ -1367,18 +1392,32 @@ pre.preview-content {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
 
-  b {
-    padding: 4px 8px;
-    border-radius: 999px;
-    color: $muted-2;
-    background: $primary-soft;
-    font-size: 12px;
+.translation-engine-action {
+  min-width: 56px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  color: $muted-2;
+  background: $primary-soft;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+
+  &:hover {
+    background: $primary-hover;
   }
 
-  &.active b {
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
     color: $primary-text;
     background: $primary;
+    cursor: default;
   }
 }
 
@@ -1401,9 +1440,10 @@ pre.preview-content {
 
 .setting-row {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) minmax(280px, 1fr);
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
   gap: 24px;
   align-items: center;
+  min-width: 0;
   min-height: 86px;
   padding: 16px 18px;
   border-bottom: 1px solid $border-soft;
@@ -1481,17 +1521,6 @@ pre.preview-content {
     padding: 0 12px;
     font-size: 14px;
     line-height: 1;
-  }
-}
-
-@media (max-width: 1180px) {
-  .translation-settings-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .translation-engine-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1755,7 +1784,7 @@ pre.preview-content {
   display: flex;
   min-width: 0;
   min-height: 0;
-  padding: 1px;
+  padding: 12px;
   background: transparent;
 }
 
@@ -1768,10 +1797,10 @@ pre.preview-content {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid $border;
+  border: 1px solid var(--floating-window-border);
   border-radius: 14px;
   background: $surface;
-  box-shadow: none;
+  box-shadow: var(--floating-window-shadow);
 }
 
 .message-viewport {
@@ -1859,7 +1888,9 @@ pre.preview-content {
   padding: 5px 12px;
   border-bottom: 1px solid $border-soft;
   background: $surface-muted;
+  cursor: move;
   user-select: none;
+  -webkit-app-region: drag;
 }
 
 .ocr-pin-button,
@@ -1875,6 +1906,7 @@ pre.preview-content {
   color: $muted;
   background: transparent;
   transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  -webkit-app-region: no-drag;
 
   &:hover:not(:disabled) {
     color: $primary;
@@ -1905,6 +1937,7 @@ pre.preview-content {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  -webkit-app-region: no-drag;
   gap: 6px;
   cursor: default;
 }
@@ -2091,6 +2124,409 @@ pre.preview-content {
   }
 }
 
+.clipboard-control-panel {
+  gap: 16px;
+}
+
+.clipboard-result-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.clipboard-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-bottom: 1px solid $border-soft;
+
+  span {
+    color: $muted-2;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.clipboard-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 34px;
+  overflow-x: auto;
+
+  button {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 34px;
+    border: 0;
+    background: transparent;
+    color: $muted;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+
+    &::after {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: 2px;
+      border-radius: 999px;
+      background: transparent;
+      content: "";
+    }
+
+    &.active {
+      color: $primary;
+
+      &::after {
+        background: $primary;
+      }
+    }
+  }
+}
+
+.clipboard-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: $primary-soft;
+  color: $primary;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.clipboard-shelf {
+  display: grid;
+  grid-auto-columns: clamp(210px, 24vw, 272px);
+  grid-auto-flow: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+}
+
+.clipboard-shelf-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid $border-soft;
+  border-radius: 8px;
+  background: $surface-muted;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
+
+  &.is-expired {
+    cursor: not-allowed;
+    opacity: 0.56;
+  }
+}
+
+.tool-workspace .clipboard-shelf-card {
+  min-height: 210px;
+}
+
+.clipboard-shelf-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  background: $primary;
+  color: $primary-text;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  user-select: none;
+}
+
+.clipboard-shelf-card.kind-image .clipboard-shelf-strip {
+  background: #159947;
+}
+
+.clipboard-shelf-card.kind-files .clipboard-shelf-strip {
+  background: #2e90b8;
+}
+
+.clipboard-shelf-card.kind-unknown .clipboard-shelf-strip {
+  background: #6f7782;
+}
+
+.clipboard-shelf-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  padding: 14px 20px;
+  overflow: hidden;
+}
+
+.clipboard-card-text,
+.clipboard-preview-text {
+  display: -webkit-box;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: $text-soft;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+}
+
+.clipboard-card-text {
+  -webkit-line-clamp: 4;
+}
+
+.clipboard-preview-text {
+  -webkit-line-clamp: 2;
+}
+
+.clipboard-card-media {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: $surface;
+}
+
+.clipboard-card-image,
+.clipboard-preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  background: $surface;
+}
+
+.clipboard-card-image {
+  width: 100%;
+  height: 100%;
+}
+
+.clipboard-preview-image {
+  width: 132px;
+  height: 78px;
+}
+
+.clipboard-card-files,
+.clipboard-preview-files {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+
+  li {
+    overflow: hidden;
+    color: $text-soft;
+    font-size: 13px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.clipboard-shelf-footer {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-top: 1px solid $border-soft;
+
+  > span {
+    min-height: 16px;
+    color: $muted-2;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.clipboard-shelf-actions,
+.clipboard-vertical-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  .text-button {
+    min-height: 24px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}
+
+.clipboard-vertical-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  list-style: none;
+}
+
+.clipboard-vertical-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid $border-soft;
+  border-radius: 8px;
+  background: $surface-muted;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
+
+  &.is-expired {
+    cursor: not-allowed;
+    opacity: 0.56;
+  }
+}
+
+.clipboard-vertical-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.clipboard-vertical-head,
+.clipboard-vertical-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    color: $text;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    flex: 0 0 auto;
+    color: $muted-2;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.clipboard-vertical-body {
+  min-width: 0;
+}
+
+.clipboard-window-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.clipboard-window-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: $text;
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+  -webkit-app-region: drag;
+
+  span {
+    color: $muted-2;
+    font-size: 12px;
+  }
+}
+
+.clipboard-window-controls {
+  -webkit-app-region: no-drag;
+}
+
+.clipboard-window-body {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  padding: 14px;
+  background: $surface;
+}
+
+.clipboard-window-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 4px;
+
+  input {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid $border-soft;
+    border-radius: 8px;
+    background: $surface-muted;
+    color: $text;
+    font: inherit;
+    padding: 0 12px;
+    outline: none;
+
+    &:focus {
+      border-color: $primary;
+      background: $surface;
+    }
+  }
+}
+
+.clipboard-window-content {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.clipboard-window .clipboard-shelf {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 12px 0 12px;
+  scrollbar-gutter: stable;
+}
+
+.clipboard-window.clipboard-layout-horizontal .clipboard-window-content {
+  padding-bottom: 4px;
+}
+
+.clipboard-window .clipboard-vertical-list {
+  padding: 12px 0 0;
+}
+
 .history-list {
   display: flex;
   flex-direction: column;
@@ -2208,135 +2644,4 @@ pre.preview-content {
 .shortcuts-hint-row {
   align-items: center;
   background: $surface;
-}
-
-// 剪贴板历史
-.clipboard-filter-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 42px;
-}
-
-.clipboard-spacer {
-  flex: 1;
-}
-
-.clipboard-row {
-  align-items: start;
-
-  &.is-expired {
-    opacity: 0.6;
-  }
-
-  &.is-pinned {
-    border-color: $primary;
-    background: $primary-active;
-  }
-}
-
-.clipboard-row-main {
-  min-width: 0;
-}
-
-.clipboard-row-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  strong {
-    color: $text;
-    font-size: 13px;
-  }
-
-  span {
-    color: $muted-2;
-    font-size: 12px;
-  }
-}
-
-.clipboard-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: $primary-soft;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.clipboard-meta {
-  color: $muted-2;
-  font-size: 12px;
-}
-
-.clipboard-row-body {
-  margin-top: 8px;
-  min-width: 0;
-}
-
-.clipboard-text {
-  margin: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  color: $text-soft;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.clipboard-image {
-  max-width: 100%;
-  max-height: 200px;
-  border: 1px solid $border-soft;
-  border-radius: 6px;
-  object-fit: contain;
-}
-
-.clipboard-file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    padding: 4px 8px;
-    border-radius: 6px;
-    background: $surface-muted;
-  }
-}
-
-.clipboard-file-icon {
-  flex: 0 0 auto;
-}
-
-.clipboard-file-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: $text-soft;
-  font-size: 13px;
-}
-
-.clipboard-expired-hint {
-  margin: 6px 0 0;
-  color: $danger;
-  font-size: 12px;
-}
-
-.clipboard-row-actions {
-  flex: 0 0 auto;
-  align-items: flex-start;
 }

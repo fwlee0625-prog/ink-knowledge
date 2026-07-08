@@ -1,11 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardPage } from "./components/features/clipboard/ClipboardPage";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { OcrPage } from "./components/features/ocr/OcrPage";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
-import { AppButton, useConfirmDialog } from "./components/ui";
+import { useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
 import {
   clearLegacySavedSettings,
@@ -18,9 +17,7 @@ import type {
   AppSettings,
   BackendStatus,
   ClearOcrOutputResponse,
-  ClipboardHistoryItem,
   ClipboardRepoConfig,
-  ClipboardTextResponse,
   DefaultSettings,
   ExtensionInfo,
   NativeCaptureResponse,
@@ -43,16 +40,12 @@ type PendingSettingsSave = {
   settings: AppSettings;
 };
 
-type TrayOpenView = View | "screenshot" | "screenshotOcr";
+type AppProps = {
+  initialView?: View;
+};
 
-function normalizeTrayView(view: TrayOpenView): View {
-  return view === "ocr" || view === "clipboard" || view === "settings"
-    ? view
-    : "ocr";
-}
-
-export function App() {
-  const [view, setView] = useState<View>("ocr");
+export function App({ initialView = "ocr" }: AppProps) {
+  const view = initialView;
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
   const [status, setStatus] = useState<BackendStatus | null>(null);
@@ -60,7 +53,6 @@ export function App() {
   const [recognizedFiles, setRecognizedFiles] = useState<RecognitionFile[]>([]);
   const [progress, setProgress] = useState<RecognitionProgress>(null);
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
-  const [clipboardHistory, setClipboardHistory] = useState<ClipboardHistoryItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState("");
   const persistedSettingsJsonRef = useRef("");
@@ -70,16 +62,6 @@ export function App() {
   const settingsSaveTimerRef = useRef<number | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const resolvedTheme = useThemeMode(settings.themePreference);
-
-  useEffect(() => {
-    const unlisten = listen<TrayOpenView>("tray-open-view", (event) => {
-      setView(normalizeTrayView(event.payload));
-    });
-
-    return () => {
-      void unlisten.then((dispose) => dispose());
-    };
-  }, []);
 
   useEffect(() => {
     const unlisten = listen<NativeCaptureResponse>("native-capture-finished", (event) => {
@@ -115,15 +97,6 @@ export function App() {
       await invoke("register_shortcuts", { bindings });
     } catch (error) {
       setLog(`注册快捷键失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, []);
-
-  const loadClipboardHistory = useCallback(async () => {
-    try {
-      const items = await invoke<ClipboardHistoryItem[]>("list_clipboard_history", { limit: 500 });
-      setClipboardHistory(items);
-    } catch (error) {
-      setLog(`加载剪贴板历史失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   }, []);
 
@@ -190,18 +163,21 @@ export function App() {
 
   useEffect(() => {
     void loadDefaultSettings();
-    void loadClipboardHistory();
-  }, [loadDefaultSettings, loadClipboardHistory]);
+  }, [loadDefaultSettings]);
 
-  // 监听后端剪贴板变化事件，自动刷新历史
   useEffect(() => {
-    const unlisten = listen("clipboard-changed", () => {
-      void loadClipboardHistory();
+    if (view === "settings") {
+      return;
+    }
+
+    const unlisten = listen("app-settings-changed", () => {
+      void loadDefaultSettings();
     });
+
     return () => {
       void unlisten.then((dispose) => dispose());
     };
-  }, [loadClipboardHistory]);
+  }, [loadDefaultSettings, view]);
 
   const checkBackend = useCallback(async () => {
     await runBusy(async () => {
@@ -609,85 +585,8 @@ export function App() {
     });
   };
 
-  const readCurrentClipboard = async () => {
-    await runBusy(async () => {
-      const response = await invoke<ClipboardTextResponse>("read_clipboard_text");
-      if (response.text.trim()) {
-        // 走 write_clipboard_text 让 Rust 统一入库；source=clipboard 表示来自系统剪贴板
-        await invoke("write_clipboard_text", {
-          request: { text: response.text, source: "clipboard" },
-        });
-        await loadClipboardHistory();
-      }
-      setLog(response.text.trim() ? "已读取当前剪贴板文本。" : "当前剪贴板没有文本。");
-    });
-  };
-
-  const clearClipboardHistory = async () => {
-    try {
-      await invoke("clear_clipboard_history");
-      await loadClipboardHistory();
-      setLog("剪贴板历史已清空。");
-    } catch (error) {
-      setLog(`清空剪贴板历史失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  const deleteClipboardItem = async (id: string) => {
-    try {
-      await invoke("delete_clipboard_item", { id });
-      setClipboardHistory((current) => current.filter((item) => item.id !== id));
-    } catch (error) {
-      setLog(`删除剪贴板记录失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  const toggleClipboardPinned = async (id: string, pinned: boolean) => {
-    try {
-      await invoke("set_clipboard_pinned", { id, pinned });
-      setClipboardHistory((current) =>
-        current.map((item) => (item.id === id ? { ...item, pinned } : item)),
-      );
-    } catch (error) {
-      setLog(`更新置顶失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  const useClipboardItem = async (id: string) => {
-    try {
-      await invoke("use_clipboard_item", { request: { id } });
-      await loadClipboardHistory();
-      setLog("已放入系统剪贴板，可直接粘贴。");
-    } catch (error) {
-      setLog(`使用剪贴板记录失败: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  const title = useMemo(() => {
-    if (view === "settings") return "系统设置";
-    return "墨识";
-  }, [view]);
-
   return (
     <section className={view === "settings" ? "shell stack-page settings-shell" : "shell stack-page"}>
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">本地识别与快捷工具箱</p>
-          <h1>{title}</h1>
-        </div>
-        <nav className="nav-actions">
-          <AppButton active={view === "ocr"} disabled={busy} onClick={() => setView("ocr")}>
-            OCR
-          </AppButton>
-          <AppButton active={view === "clipboard"} disabled={busy} onClick={() => setView("clipboard")}>
-            剪贴板
-          </AppButton>
-          <AppButton active={view === "settings"} disabled={busy} onClick={() => setView("settings")}>
-            设置
-          </AppButton>
-        </nav>
-      </header>
-
       {view === "ocr" && (
         <OcrPage
           busy={busy}
@@ -699,18 +598,6 @@ export function App() {
           progress={progress}
           recognizedFiles={recognizedFiles}
           selectedFiles={selectedFiles}
-        />
-      )}
-
-      {view === "clipboard" && (
-        <ClipboardPage
-          busy={busy}
-          history={clipboardHistory}
-          onClear={clearClipboardHistory}
-          onDelete={deleteClipboardItem}
-          onReadCurrent={readCurrentClipboard}
-          onTogglePinned={toggleClipboardPinned}
-          onUseItem={useClipboardItem}
         />
       )}
 

@@ -8,6 +8,7 @@ import type {
   AppSettings,
   BackendStatus,
   ClearStorageCacheResponse,
+  ClipboardLayout,
   ExtensionInfo,
   OcrEngine,
   SettingsCategory,
@@ -50,6 +51,11 @@ const themeOptions: Array<{ label: string; value: ThemePreference }> = [
 const translationEngineOptions: Array<{ label: string; value: TranslationEngine }> = [
   { label: "OpenAI 兼容", value: "openai-compatible" },
   { label: "火山翻译", value: "volcengine" },
+];
+
+const clipboardLayoutOptions: Array<{ label: string; value: ClipboardLayout }> = [
+  { label: "横向", value: "horizontal" },
+  { label: "纵向", value: "vertical" },
 ];
 
 const sections: Array<{ id: SettingsCategory; label: string; description: string }> = [
@@ -336,19 +342,45 @@ export function SettingsPage({
                       ? settings.translationOpenaiEnabled
                       : settings.translationVolcEnabled;
 
+                  const cardClassName = [
+                    "translation-engine-card",
+                    active ? "active" : "",
+                    enabled ? "current" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
                   return (
-                    <button
-                      className={active ? "translation-engine-card active" : "translation-engine-card"}
+                    <div
+                      aria-label={`查看${option.label}配置`}
+                      className={cardClassName}
                       key={option.value}
-                      onClick={() => activateTranslationEngine(option.value)}
-                      type="button"
+                      onClick={() => setActiveTranslationEngine(option.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveTranslationEngine(option.value);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <span className="translation-engine-mark">{option.value === "volcengine" ? "火" : "AI"}</span>
                       <span>
                         <strong>{option.label}</strong>
                       </span>
-                      <b>{enabled ? "使用中" : "启用"}</b>
-                    </button>
+                      <button
+                        className="translation-engine-action"
+                        disabled={enabled}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          activateTranslationEngine(option.value);
+                        }}
+                        type="button"
+                      >
+                        {enabled ? "使用中" : "启用"}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -488,6 +520,15 @@ export function SettingsPage({
                 >
                   启用
                 </Toggle>
+              </SettingRow>
+              <SettingRow description="控制剪贴板独立窗口和主页面的历史展示方式。" label="显示样式">
+                <SegmentedControl
+                  onChange={(clipboardLayout) =>
+                    updateSettings((current) => ({ ...current, clipboardLayout }))
+                  }
+                  options={clipboardLayoutOptions}
+                  value={settings.clipboardLayout}
+                />
               </SettingRow>
               <NumberRow
                 description="超过上限后保留最新记录，置顶项不受裁剪影响。"

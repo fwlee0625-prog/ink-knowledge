@@ -78,6 +78,8 @@ export type ThemePreference = "system" | "light" | "dark";
 
 export type TranslationEngine = "openai-compatible" | "volcengine";
 
+export type ClipboardLayout = "horizontal" | "vertical";
+
 /// 全局快捷键绑定。字段名与 Rust 侧 ShortcutBindings serde rename 一致。
 /// 空字符串表示该功能不绑定快捷键。
 export type ShortcutBindings = {
@@ -115,6 +117,7 @@ export type AppSettings = {
   clipboardRecordText: boolean;
   clipboardHistoryLimit: number;
   clipboardIgnoreSensitive: boolean;
+  clipboardLayout: ClipboardLayout;
   shortcutBindings: ShortcutBindings;
 };
 
@@ -130,7 +133,7 @@ export type DefaultSettings = {
   recursion_depth: number;
 };
 
-export type View = "ocr" | "clipboard" | "settings";
+export type View = "ocr" | "settings";
 
 export type SettingsCategory =
   | "general"

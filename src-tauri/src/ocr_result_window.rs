@@ -75,6 +75,11 @@ pub fn open_ocr_result_window(
 
         let app_handle = app.clone();
         window.on_window_event(move |event| {
+            crate::floating_window::handle_window_event(
+                &app_handle,
+                OCR_RESULT_WINDOW_LABEL,
+                event,
+            );
             if matches!(event, WindowEvent::Destroyed) {
                 unregister_close_shortcut(&app_handle);
             }

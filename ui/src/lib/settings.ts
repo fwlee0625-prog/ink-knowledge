@@ -40,6 +40,7 @@ export const fallbackSettings: AppSettings = {
   clipboardRecordText: true,
   clipboardHistoryLimit: 100,
   clipboardIgnoreSensitive: true,
+  clipboardLayout: "horizontal",
   shortcutBindings: { ...defaultShortcutBindings },
 };
 
@@ -89,6 +90,9 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   }
   if (typeof saved.clipboardHistoryLimit === "number") {
     saved.clipboardHistoryLimit = clampNumber(saved.clipboardHistoryLimit, 10, 500);
+  }
+  if (saved.clipboardLayout !== "horizontal" && saved.clipboardLayout !== "vertical") {
+    saved.clipboardLayout = "horizontal";
   }
   if (typeof saved.ocrResultAutoCloseOnBlur !== "boolean") {
     saved.ocrResultAutoCloseOnBlur = true;

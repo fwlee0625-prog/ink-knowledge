@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { OcrResultContent } from "./OcrResultContent";
 import { PinIcon } from "./OcrResultIcons";
+import { useFloatingWindowAutoClose } from "../floating-window/useFloatingWindowAutoClose";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
 import { resolveTranslationEngine } from "../../../lib/translation";
 import type {
@@ -57,6 +58,13 @@ export function OcrResultWindow() {
   const [pinned, setPinned] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
   const currentWindow = useMemo(() => getCurrentWindow(), []);
+  const { closeWhenOutsideShell } = useFloatingWindowAutoClose({
+    autoCloseOnBlur: settings.ocrResultAutoCloseOnBlur,
+    currentWindow,
+    label: "ocr-result",
+    pinned,
+    shellSelector: ".ocr-result-shell",
+  });
 
   useEffect(() => {
     let disposed = false;
@@ -98,53 +106,6 @@ export function OcrResultWindow() {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [currentWindow]);
-
-  useEffect(() => {
-    if (!settings.ocrResultAutoCloseOnBlur || pinned) {
-      return;
-    }
-
-    let hasBeenFocused = false;
-    let closeTimer: number | undefined;
-    let disposed = false;
-
-    void currentWindow.isFocused().then((focused) => {
-      if (!disposed && focused) {
-        hasBeenFocused = true;
-      }
-    });
-
-    const unlistenPromise = currentWindow.onFocusChanged(({ payload: focused }) => {
-      if (focused) {
-        hasBeenFocused = true;
-        if (closeTimer !== undefined) {
-          window.clearTimeout(closeTimer);
-          closeTimer = undefined;
-        }
-        return;
-      }
-
-      if (!hasBeenFocused) {
-        return;
-      }
-
-      closeTimer = window.setTimeout(() => {
-        void currentWindow.isFocused().then((stillFocused) => {
-          if (!stillFocused) {
-            void currentWindow.close();
-          }
-        });
-      }, 120);
-    });
-
-    return () => {
-      disposed = true;
-      if (closeTimer !== undefined) {
-        window.clearTimeout(closeTimer);
-      }
-      void unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, [currentWindow, pinned, settings.ocrResultAutoCloseOnBlur]);
 
   useEffect(() => {
     void invoke<OcrResultWindowPayload | null>("get_pending_ocr_result").then((payload) => {
@@ -228,7 +189,7 @@ export function OcrResultWindow() {
   // data 还没加载时也渲染真实窗口壳，避免白屏并保留 header 原生拖拽。
   if (!data) {
     return (
-      <main className="ocr-result-window">
+      <main className="ocr-result-window" onMouseDownCapture={closeWhenOutsideShell}>
         <section aria-label="截图 OCR 识别结果" className="ocr-result-shell">
           <header className="ocr-result-toolbar" onMouseDown={handleLoadingToolbarMouseDown}>
             <button
@@ -253,7 +214,7 @@ export function OcrResultWindow() {
   }
 
   return (
-    <main className="ocr-result-window">
+    <main className="ocr-result-window" onMouseDownCapture={closeWhenOutsideShell}>
       <OcrResultContent
         busy={busy}
         data={data}

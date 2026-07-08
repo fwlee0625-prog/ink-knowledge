@@ -2,14 +2,12 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager,
+    AppHandle,
 };
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use crate::shortcuts::ShortcutBindings;
 
-const EVENT_OPEN_VIEW: &str = "tray-open-view";
-const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_ID: &str = "moshi-main";
 
 /// 菜单项 ID 与 shortcut action ID 共用，便于菜单事件和全局快捷键走同一分发路径。
@@ -122,12 +120,12 @@ fn accelerator_opt(accelerator: &str) -> Option<&str> {
 /// `id` 取功能 ID：`ocr`、`screenshot`、`screenshot-ocr`、`translation`、`clipboard`、`settings`。
 pub fn dispatch_action(app: &AppHandle, id: &str) {
     match id {
-        ACTION_OCR => open_view(app, "ocr"),
+        ACTION_OCR => open_ocr_window(app),
         ACTION_SCREENSHOT => start_native_capture(app, Some("save")),
         ACTION_SCREENSHOT_OCR => start_native_capture(app, Some("ocr")),
         ACTION_TRANSLATION => open_translation_window(app),
-        ACTION_CLIPBOARD => open_view(app, "clipboard"),
-        ACTION_SETTINGS => open_view(app, "settings"),
+        ACTION_CLIPBOARD => open_clipboard_window(app),
+        ACTION_SETTINGS => open_settings_window(app),
         _ => {}
     }
 }
@@ -211,15 +209,35 @@ fn open_translation_window(app: &AppHandle) {
     }
 }
 
-fn open_view(app: &AppHandle, view: &str) {
-    show_main_window(app);
-    let _ = app.emit(EVENT_OPEN_VIEW, view);
+fn open_clipboard_window(app: &AppHandle) {
+    if let Err(error) = crate::clipboard_window::open_clipboard_window(app) {
+        app.dialog()
+            .message(error)
+            .title("剪贴板失败")
+            .kind(MessageDialogKind::Error)
+            .buttons(MessageDialogButtons::Ok)
+            .show(|_| {});
+    }
 }
 
-fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+fn open_ocr_window(app: &AppHandle) {
+    if let Err(error) = crate::app_window::open_ocr_window(app) {
+        app.dialog()
+            .message(error)
+            .title("OCR 失败")
+            .kind(MessageDialogKind::Error)
+            .buttons(MessageDialogButtons::Ok)
+            .show(|_| {});
+    }
+}
+
+fn open_settings_window(app: &AppHandle) {
+    if let Err(error) = crate::app_window::open_settings_window(app) {
+        app.dialog()
+            .message(error)
+            .title("设置失败")
+            .kind(MessageDialogKind::Error)
+            .buttons(MessageDialogButtons::Ok)
+            .show(|_| {});
     }
 }

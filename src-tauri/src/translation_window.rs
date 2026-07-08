@@ -9,7 +9,9 @@ pub struct TranslationWindowResponse {
     pub message: String,
 }
 
-pub fn open_translation_window(app: &tauri::AppHandle) -> Result<TranslationWindowResponse, String> {
+pub fn open_translation_window(
+    app: &tauri::AppHandle,
+) -> Result<TranslationWindowResponse, String> {
     if let Some(window) = app.get_webview_window(TRANSLATION_WINDOW_LABEL) {
         let _ = window.set_always_on_top(true);
         let _ = window.set_visible_on_all_workspaces(true);
@@ -37,6 +39,15 @@ pub fn open_translation_window(app: &tauri::AppHandle) -> Result<TranslationWind
         .skip_taskbar(true)
         .build()
         .map_err(|error| format!("打开翻译窗口失败: {error}"))?;
+
+        let app_handle = app.clone();
+        window.on_window_event(move |event| {
+            crate::floating_window::handle_window_event(
+                &app_handle,
+                TRANSLATION_WINDOW_LABEL,
+                event,
+            );
+        });
 
         let _ = window.show();
         let _ = window.set_focus();

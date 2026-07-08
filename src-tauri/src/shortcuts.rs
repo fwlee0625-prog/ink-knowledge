@@ -94,6 +94,7 @@ pub fn register_all(app: &AppHandle, bindings: &ShortcutBindings) -> Result<(), 
     // 重建托盘菜单，让菜单项加速器显示与最新绑定保持一致。
     crate::tray::rebuild_menu(app, bindings)?;
     crate::ocr_result_window::restore_close_shortcut_if_open(app);
+    crate::clipboard_window::restore_close_shortcut_if_open(app);
 
     Ok(())
 }

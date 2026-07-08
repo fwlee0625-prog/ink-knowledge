@@ -6,7 +6,9 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+const EVENT_APP_SETTINGS_CHANGED: &str = "app-settings-changed";
 
 pub use crate::clipboard_repo::{ClipboardHistoryItem, ClipboardRepoConfig};
 pub use crate::extensions::{ExtensionInfo, InstallExtensionRequest, UninstallExtensionRequest};
@@ -16,6 +18,7 @@ pub use crate::storage::{
 };
 pub use crate::{
     clipboard::{ClipboardTextResponse, ClipboardWriteRequest},
+    clipboard_window::ClipboardWindowResponse,
     native_capture::{NativeCaptureRequest, NativeCaptureResponse},
     ocr_result_window::{OcrResultWindowPayload, OcrResultWindowRequest, OcrResultWindowResponse},
     screenshot::{
@@ -154,7 +157,13 @@ pub async fn load_app_settings(app: tauri::AppHandle) -> Result<Option<Value>, S
 
 #[tauri::command]
 pub async fn save_app_settings(app: tauri::AppHandle, settings: Value) -> Result<(), String> {
-    run_blocking(move || crate::settings_repo::save_app_settings(app, settings)).await
+    run_blocking({
+        let app = app.clone();
+        move || crate::settings_repo::save_app_settings(app, settings)
+    })
+    .await?;
+    let _ = app.emit(EVENT_APP_SETTINGS_CHANGED, ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -230,6 +239,18 @@ pub async fn open_translation_window(
     app: tauri::AppHandle,
 ) -> Result<TranslationWindowResponse, String> {
     run_blocking(move || crate::translation_window::open_translation_window(&app)).await
+}
+
+#[tauri::command]
+pub async fn open_clipboard_window(
+    app: tauri::AppHandle,
+) -> Result<ClipboardWindowResponse, String> {
+    run_blocking(move || crate::clipboard_window::open_clipboard_window(&app)).await
+}
+
+#[tauri::command]
+pub async fn set_floating_window_auto_close(label: String, enabled: bool) -> Result<(), String> {
+    crate::floating_window::set_auto_close_enabled(&label, enabled)
 }
 
 #[tauri::command]

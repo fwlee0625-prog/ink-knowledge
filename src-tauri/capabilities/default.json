@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for the main window and lightweight tool result windows.",
-  "windows": ["main", "ocr-result", "translation"],
+  "description": "Default permissions for the app windows and lightweight tool result windows.",
+  "windows": ["main", "ocr", "settings", "ocr-result", "translation", "clipboard"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

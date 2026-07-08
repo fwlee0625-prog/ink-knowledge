@@ -1,8 +1,11 @@
+mod app_window;
 mod backend;
 mod clipboard;
 mod clipboard_repo;
+mod clipboard_window;
 mod commands;
 mod extensions;
+mod floating_window;
 mod native_capture;
 mod native_pasteboard;
 mod ocr_result_window;
@@ -73,6 +76,7 @@ pub fn run() {
             commands::load_app_settings,
             commands::list_clipboard_history,
             commands::list_extensions,
+            commands::open_clipboard_window,
             commands::open_result_file,
             commands::open_ocr_result_window,
             commands::open_translation_window,
@@ -87,6 +91,7 @@ pub fn run() {
             commands::scan_supported_files,
             commands::set_clipboard_pinned,
             commands::set_clipboard_polling,
+            commands::set_floating_window_auto_close,
             commands::start_native_capture,
             commands::translate_text,
             commands::uninstall_extension,
