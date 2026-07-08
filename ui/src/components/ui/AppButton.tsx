@@ -1,5 +1,7 @@
 import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Button } from "./button";
+import { cn } from "../../lib/utils";
 
 type AppButtonVariant = "primary" | "ghost" | "text" | "file";
 
@@ -13,12 +15,12 @@ export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(function 
   { active = false, children, className = "", variant = "ghost", ...props },
   ref,
 ) {
-  const classes = [buttonClass(variant), active ? "active" : "", className].filter(Boolean).join(" ");
+  const classes = cn(buttonClass(variant), active && "active", className);
 
   return (
-    <button className={classes} ref={ref} type="button" {...props}>
+    <Button className={classes} ref={ref} type="button" variant={shadcnVariant(variant)} {...props}>
       {children}
-    </button>
+    </Button>
   );
 });
 
@@ -27,4 +29,10 @@ function buttonClass(variant: AppButtonVariant) {
   if (variant === "text") return "text-button";
   if (variant === "file") return "file-picker action-button";
   return "ghost action-button";
+}
+
+function shadcnVariant(variant: AppButtonVariant) {
+  if (variant === "primary") return "default";
+  if (variant === "text") return "ghost";
+  return "outline";
 }

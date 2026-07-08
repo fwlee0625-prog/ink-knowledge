@@ -45,7 +45,7 @@ export function ScreenshotPage({
         </div>
       </Card>
 
-      <Card className="screenshot-stage" variant="result">
+      <Card className="result screenshot-stage">
         {screenshot ? (
           <>
             <div className="screenshot-preview">

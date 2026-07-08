@@ -1,5 +1,6 @@
 import type { AppSettings, ShortcutBindings } from "../types";
 import { clampNumber } from "./format";
+import { normalizeOcrLanguage } from "./ocrLanguages";
 
 export const legacySettingsKey = "mac-local-ocr.settings";
 
@@ -75,6 +76,7 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   if (saved.ocrEngine !== "paddle" && saved.ocrEngine !== "apple-vision") {
     saved.ocrEngine = "apple-vision";
   }
+  saved.lang = normalizeOcrLanguage(saved.lang);
   if (
     saved.themePreference !== "system" &&
     saved.themePreference !== "light" &&

@@ -100,7 +100,7 @@ export function OcrPage({
 
   return (
     <section className={activeResultPath ? "workspace main-workspace with-result-preview" : "workspace main-workspace"}>
-      <Card as="aside">
+      <Card className="panel">
         <div className="field">
           <span>文件</span>
           <div className="picker-actions">
@@ -125,7 +125,7 @@ export function OcrPage({
         />
       </Card>
 
-      <Card variant="result">
+      <Card className="result">
         <div className="result-head">
           <div>
             <h2>识别文件</h2>

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { AppButton } from "./AppButton";
+import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 type SegmentedOption<TValue extends string> = {
   label: string;
@@ -22,18 +22,27 @@ export function SegmentedControl<TValue extends string>({
   const style = { "--segmented-options": options.length } as CSSProperties;
 
   return (
-    <div className="segmented-control" style={style}>
+    <ToggleGroup
+      className="segmented-control"
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        if (nextValue) {
+          onChange(nextValue as TValue);
+        }
+      }}
+      style={style}
+      type="single"
+      value={value}
+    >
       {options.map((option) => (
-        <AppButton
-          active={value === option.value}
-          disabled={disabled}
+        <ToggleGroupItem
+          className="text-button"
           key={option.value}
-          onClick={() => onChange(option.value)}
-          variant="text"
+          value={option.value}
         >
           {option.label}
-        </AppButton>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }

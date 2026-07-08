@@ -58,7 +58,7 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
         />
       </Card>
 
-      <Card className="tool-detail-panel clipboard-result-panel" variant="result">
+      <Card className="result tool-detail-panel clipboard-result-panel">
         <div className="clipboard-result-head">
           <span>{model.visibleItems.length} 条</span>
           <AppButton disabled={model.history.length === 0} onClick={model.clearHistory} variant="text">

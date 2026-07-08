@@ -1,9 +1,57 @@
-import type { ReactNode } from "react";
+import type { ComponentType, CSSProperties, ReactNode } from "react";
+import type { LucideProps } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  Blocks,
+  Bot,
+  CheckCircle2,
+  Clipboard,
+  Cpu,
+  Crop,
+  Database,
+  FileJson,
+  Folder,
+  Gauge,
+  HardDrive,
+  Image,
+  Info,
+  Keyboard,
+  KeyRound,
+  Languages,
+  LayoutPanelTop,
+  Monitor,
+  Moon,
+  Package,
+  RefreshCw,
+  RotateCcw,
+  ScanText,
+  Settings,
+  Shield,
+  Sun,
+  Zap,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { AppButton, Card, SegmentedControl, ShortcutInput, Toggle } from "../../ui";
+import {
+  Alert,
+  AlertDescription,
+  AppSelect,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Separator,
+  ShortcutInput,
+  Switch,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "../../ui";
 import { clampNumber, formatBytes } from "../../../lib/format";
+import { ocrLanguageOptions } from "../../../lib/ocrLanguages";
 import { defaultShortcutBindings } from "../../../lib/settings";
+import { cn } from "../../../lib/utils";
 import type {
   AppSettings,
   BackendStatus,
@@ -17,6 +65,7 @@ import type {
   TranslationEngine,
 } from "../../../types";
 import type { ResolvedTheme } from "../../../lib/theme";
+import { SettingItem } from "./SettingItem";
 
 type SettingsPageProps = {
   busy: boolean;
@@ -36,38 +85,44 @@ type SettingsPageProps = {
 };
 
 type SettingsUpdater = (current: AppSettings) => AppSettings;
+type Option<TValue extends string> = { icon?: ComponentType<LucideProps>; label: string; value: TValue };
 
-const engineOptions: Array<{ label: string; value: OcrEngine }> = [
-  { label: "Apple Vision", value: "apple-vision" },
-  { label: "PaddleOCR 扩展", value: "paddle" },
+const engineOptions: Array<Option<OcrEngine>> = [
+  { icon: Cpu, label: "Apple Vision", value: "apple-vision" },
+  { icon: Package, label: "PaddleOCR 扩展", value: "paddle" },
 ];
 
-const themeOptions: Array<{ label: string; value: ThemePreference }> = [
-  { label: "跟随系统", value: "system" },
-  { label: "浅色", value: "light" },
-  { label: "深色", value: "dark" },
+const themeOptions: Array<Option<ThemePreference>> = [
+  { icon: Monitor, label: "跟随系统", value: "system" },
+  { icon: Sun, label: "浅色", value: "light" },
+  { icon: Moon, label: "深色", value: "dark" },
 ];
 
-const translationEngineOptions: Array<{ label: string; value: TranslationEngine }> = [
-  { label: "OpenAI 兼容", value: "openai-compatible" },
-  { label: "火山翻译", value: "volcengine" },
+const translationEngineOptions: Array<Option<TranslationEngine>> = [
+  { icon: Bot, label: "OpenAI 兼容", value: "openai-compatible" },
+  { icon: Languages, label: "火山翻译", value: "volcengine" },
 ];
 
-const clipboardLayoutOptions: Array<{ label: string; value: ClipboardLayout }> = [
-  { label: "横向", value: "horizontal" },
-  { label: "纵向", value: "vertical" },
+const clipboardLayoutOptions: Array<Option<ClipboardLayout>> = [
+  { icon: LayoutPanelTop, label: "横向", value: "horizontal" },
+  { icon: Clipboard, label: "纵向", value: "vertical" },
 ];
 
-const sections: Array<{ id: SettingsCategory; label: string; description: string }> = [
-  { id: "general", label: "通用", description: "界面主题和基础偏好" },
-  { id: "ocr", label: "OCR", description: "输出、引擎和 PDF 行为" },
-  { id: "translation", label: "翻译", description: "API 和语言偏好" },
-  { id: "screenshot", label: "截图", description: "保存目录和 OCR 快捷行为" },
-  { id: "clipboard", label: "剪贴板", description: "文本、图片和文件历史" },
-  { id: "storage", label: "缓存管理", description: "查看占用并清理缓存" },
-  { id: "shortcuts", label: "快捷键", description: "全局快捷键绑定" },
-  { id: "backend", label: "后端与扩展", description: "状态检查和 OCR 扩展" },
-  { id: "about", label: "关于", description: "版本与权限说明" },
+const sections: Array<{
+  description: string;
+  icon: ComponentType<LucideProps>;
+  id: SettingsCategory;
+  label: string;
+}> = [
+  { description: "界面主题和基础偏好", icon: Settings, id: "general", label: "通用" },
+  { description: "输出、引擎和 PDF 行为", icon: ScanText, id: "ocr", label: "OCR" },
+  { description: "API 和语言偏好", icon: Languages, id: "translation", label: "翻译" },
+  { description: "保存目录和 OCR 快捷行为", icon: Crop, id: "screenshot", label: "截图" },
+  { description: "文本、图片和文件历史", icon: Clipboard, id: "clipboard", label: "剪贴板" },
+  { description: "查看占用并清理缓存", icon: Database, id: "storage", label: "缓存管理" },
+  { description: "全局快捷键绑定", icon: Keyboard, id: "shortcuts", label: "快捷键" },
+  { description: "状态检查和 OCR 扩展", icon: Blocks, id: "backend", label: "后端与扩展" },
+  { description: "版本与权限说明", icon: Info, id: "about", label: "关于" },
 ];
 
 export function SettingsPage({
@@ -95,6 +150,7 @@ export function SettingsPage({
   const [cacheSelectionMode, setCacheSelectionMode] = useState(false);
   const [selectedCacheIds, setSelectedCacheIds] = useState<string[]>([]);
   const draftSettingsRef = useRef(settings);
+  const activeMeta = sections.find((section) => section.id === activeSection) ?? sections[0];
 
   useEffect(() => {
     draftSettingsRef.current = settings;
@@ -190,753 +246,933 @@ export function SettingsPage({
   }, [activeSection, settings.outputDir, settings.screenshotOutputDir]);
 
   return (
-    <Card className="settings-panel settings-layout" variant="page">
-      <aside className="settings-sidebar" aria-label="设置分类">
-        {sections.map((section) => (
-          <button
-            className={activeSection === section.id ? "settings-nav-button active" : "settings-nav-button"}
-            key={section.id}
-            onClick={() => setActiveSection(section.id)}
-            type="button"
-          >
-            <strong>{section.label}</strong>
-            <span>{section.description}</span>
-          </button>
-        ))}
-      </aside>
+    <div className="settings-desktop-grid grid h-full min-h-0 gap-4 bg-background text-foreground">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-border/50 bg-background/70 p-2 shadow-sm backdrop-blur-xl max-md:min-h-[260px]">
+          <nav className="min-h-0 flex-1 space-y-1 overflow-auto pr-1" aria-label="设置分类">
+            {sections.map((section) => {
+              const Icon = section.icon;
+              const active = activeSection === section.id;
 
-      <div className="settings-content" onBlurCapture={saveDraftSettings}>
-        {activeSection === "general" && (
-          <SettingsSection
-            description="管理界面主题和应用基础偏好。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="通用"
-          >
-            <div className="settings-list">
-              <SettingRow
-                description={`当前实际使用${resolvedTheme === "dark" ? "深色" : "浅色"}界面。`}
-                label="界面主题"
-              >
-                <SegmentedControl
-                  onChange={(themePreference) => updateSettings((current) => ({ ...current, themePreference }))}
-                  options={themeOptions}
-                  value={settings.themePreference}
-                />
-              </SettingRow>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "ocr" && (
-          <SettingsSection
-            description="管理 OCR 输出位置、输出格式、引擎和 PDF 扫描行为。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="OCR"
-          >
-            <div className="settings-list">
-              <SettingRow description="默认输出 OCR 结果的位置。" label="存储目录">
-                <div className="file-row">
-                  <input
-                    onChange={(event) => updateSettings((current) => ({ ...current, outputDir: event.target.value }))}
-                    placeholder="默认在文稿目录下创建 墨识/OCR"
-                    value={settings.outputDir}
-                  />
-                  <AppButton onClick={onChooseOutputDir}>选择</AppButton>
-                </div>
-              </SettingRow>
-              <SettingRow description="至少保留一种 OCR 输出格式。" label="输出格式">
-                <div className="check-row">
-                  <Toggle
-                    checked={settings.outputTxt}
-                    disabled={settings.outputTxt && !settings.outputJson}
-                    onChange={(event) =>
-                      updateSettings((current) => ({
-                        ...current,
-                        outputTxt: event.target.checked || !current.outputJson,
-                      }))
-                    }
-                  >
-                    TXT
-                  </Toggle>
-                  <Toggle
-                    checked={settings.outputJson}
-                    disabled={settings.outputJson && !settings.outputTxt}
-                    onChange={(event) =>
-                      updateSettings((current) => ({
-                        ...current,
-                        outputJson: event.target.checked || !current.outputTxt,
-                      }))
-                    }
-                  >
-                    JSON
-                  </Toggle>
-                </div>
-              </SettingRow>
-              <SettingRow description="Apple Vision 内置可用，PaddleOCR 需先安装扩展。" label="识别引擎">
-                <SegmentedControl
-                  disabled={busy}
-                  onChange={(ocrEngine) => updateSettings((current) => ({ ...current, ocrEngine }))}
-                  options={engineOptions}
-                  value={settings.ocrEngine}
-                />
-              </SettingRow>
-              <NumberRow
-                description="用于 PDF 扫描页渲染，数值越高越清晰也越慢。"
-                label="DPI"
-                max={600}
-                min={72}
-                onChange={(dpi) => updateSettings((current) => ({ ...current, dpi }))}
-                value={settings.dpi}
-              />
-              <SettingRow description="支持 ch、en、zh-Hans、zh-Hant 等语言代码。" label="语言">
-                <input
-                  onChange={(event) => updateSettings((current) => ({ ...current, lang: event.target.value }))}
-                  value={settings.lang}
-                />
-              </SettingRow>
-              <NumberRow
-                description="批量选择文件夹时向下扫描的目录层级。"
-                label="文件夹递归层级"
-                max={5}
-                min={1}
-                onChange={(recursionDepth) => updateSettings((current) => ({ ...current, recursionDepth }))}
-                value={settings.recursionDepth}
-              />
-              <SettingRow description="重新识别时先清空旧的识别文件结果列表，并删除存储目录顶层的 txt/json 输出文件；关闭后会保留旧结果并追加本次结果。" label="识别前清空结果">
-                <Toggle
-                  checked={settings.clearOcrResultsBeforeRun}
-                  onChange={(event) =>
-                    updateSettings((current) => ({
-                      ...current,
-                      clearOcrResultsBeforeRun: event.target.checked,
-                    }))
-                  }
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-              <SettingRow description="忽略 PDF 自带文本层，逐页渲染后重新识别。" label="强制 OCR PDF 文本层">
-                <Toggle
-                  checked={settings.forceOcr}
-                  onChange={(event) => updateSettings((current) => ({ ...current, forceOcr: event.target.checked }))}
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "translation" && (
-          <SettingsSection
-            description="管理当前翻译引擎、密钥和语言偏好。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="翻译"
-          >
-            <div className="translation-settings-grid">
-              <div className="translation-engine-list" aria-label="翻译引擎">
-                {translationEngineOptions.map((option) => {
-                  const active = activeTranslationEngine === option.value;
-                  const enabled =
-                    option.value === "openai-compatible"
-                      ? settings.translationOpenaiEnabled
-                      : settings.translationVolcEnabled;
-
-                  const cardClassName = [
-                    "translation-engine-card",
-                    active ? "active" : "",
-                    enabled ? "current" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-
-                  return (
-                    <div
-                      aria-label={`查看${option.label}配置`}
-                      className={cardClassName}
-                      key={option.value}
-                      onClick={() => setActiveTranslationEngine(option.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActiveTranslationEngine(option.value);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <span className="translation-engine-mark">{option.value === "volcengine" ? "火" : "AI"}</span>
-                      <span>
-                        <strong>{option.label}</strong>
-                      </span>
-                      <button
-                        className="translation-engine-action"
-                        disabled={enabled}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          activateTranslationEngine(option.value);
-                        }}
-                        type="button"
-                      >
-                        {enabled ? "使用中" : "启用"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="settings-list translation-config-list">
-                {activeTranslationEngine === "openai-compatible" && (
-                  <>
-                    <TextRow
-                      description="例如 https://api.openai.com，或直接填 chat/completions 端点。"
-                      label="API Base URL"
-                      onChange={(translationApiBaseUrl) =>
-                        updateSettings((current) => ({ ...current, translationApiBaseUrl }))
-                      }
-                      placeholder="https://api.openai.com"
-                      value={settings.translationApiBaseUrl}
-                    />
-                    <TextRow
-                      description="保存到本机 SQLite 设置库。"
-                      label="API Key"
-                      onChange={(translationApiKey) =>
-                        updateSettings((current) => ({ ...current, translationApiKey }))
-                      }
-                      placeholder="sk-..."
-                      type="password"
-                      value={settings.translationApiKey}
-                    />
-                    <TextRow
-                      description="默认使用轻量模型。"
-                      label="模型"
-                      onChange={(translationModel) =>
-                        updateSettings((current) => ({ ...current, translationModel }))
-                      }
-                      value={settings.translationModel}
-                    />
-                  </>
-                )}
-                {activeTranslationEngine === "volcengine" && (
-                  <>
-                    <TextRow
-                      description="火山引擎访问密钥 Access Key ID，保存到本机 SQLite 设置库。"
-                      label="Access Key"
-                      onChange={(translationVolcAccessKey) =>
-                        updateSettings((current) => ({ ...current, translationVolcAccessKey }))
-                      }
-                      placeholder="AK..."
-                      value={settings.translationVolcAccessKey}
-                    />
-                    <TextRow
-                      description="火山引擎 Secret Access Key，保存到本机 SQLite 设置库。"
-                      label="Secret Key"
-                      onChange={(translationVolcSecretKey) =>
-                        updateSettings((current) => ({ ...current, translationVolcSecretKey }))
-                      }
-                      placeholder="SK..."
-                      type="password"
-                      value={settings.translationVolcSecretKey}
-                    />
-                  </>
-                )}
-                <SettingRow description="简体中文自动译为英文，其他语言自动译为简体中文。" label="语言方向">
-                  <strong className="setting-static-value">自动判断</strong>
-                </SettingRow>
-              </div>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "screenshot" && (
-          <SettingsSection
-            description="截图和截图 OCR 是两个独立工具，普通截图可通过按钮快捷识别。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="截图"
-          >
-            <div className="settings-list">
-              <SettingRow description="默认输出截图结果的位置。" label="截图保存目录">
-                <div className="file-row">
-                  <input
-                    onChange={(event) =>
-                      updateSettings((current) => ({ ...current, screenshotOutputDir: event.target.value }))
-                    }
-                    placeholder="默认在文稿目录下创建 墨识/Screenshots"
-                    value={settings.screenshotOutputDir}
-                  />
-                  <AppButton onClick={onChooseScreenshotOutputDir}>选择</AppButton>
-                </div>
-              </SettingRow>
-              <SettingRow description="普通截图后是否自动打开 OCR；默认关闭，使用工具栏 OCR 按钮。" label="截图后自动 OCR">
-                <Toggle
-                  checked={settings.screenshotAutoOcr}
-                  onChange={(event) =>
-                    updateSettings((current) => ({ ...current, screenshotAutoOcr: event.target.checked }))
-                  }
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-              <SettingRow description="关闭后后续版本会在完成操作后清理临时截图。" label="保留临时文件">
-                <Toggle
-                  checked={settings.screenshotKeepTemp}
-                  onChange={(event) =>
-                    updateSettings((current) => ({ ...current, screenshotKeepTemp: event.target.checked }))
-                  }
-                >
-                  保留
-                </Toggle>
-              </SettingRow>
-              <SettingRow description="结果窗获得焦点后，点击其他应用或窗口时自动关闭；默认开启。" label="结果窗失焦自动关闭">
-                <Toggle
-                  checked={settings.ocrResultAutoCloseOnBlur}
-                  onChange={(event) =>
-                    updateSettings((current) => ({
-                      ...current,
-                      ocrResultAutoCloseOnBlur: event.target.checked,
-                    }))
-                  }
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "clipboard" && (
-          <SettingsSection
-            description="自动捕获系统复制，支持文本、图片和文件（文件仅存路径）。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="剪贴板"
-          >
-            <div className="settings-list">
-              <SettingRow description="关闭后复制仍会写入系统剪贴板，但不进入历史。" label="自动捕获系统复制">
-                <Toggle
-                  checked={settings.clipboardRecordText}
-                  onChange={(event) =>
-                    updateSettings((current) => ({ ...current, clipboardRecordText: event.target.checked }))
-                  }
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-              <SettingRow description="控制剪贴板独立窗口和主页面的历史展示方式。" label="显示样式">
-                <SegmentedControl
-                  onChange={(clipboardLayout) =>
-                    updateSettings((current) => ({ ...current, clipboardLayout }))
-                  }
-                  options={clipboardLayoutOptions}
-                  value={settings.clipboardLayout}
-                />
-              </SettingRow>
-              <NumberRow
-                description="超过上限后保留最新记录，置顶项不受裁剪影响。"
-                label="历史条数上限"
-                max={500}
-                min={10}
-                onChange={(clipboardHistoryLimit) =>
-                  updateSettings((current) => ({ ...current, clipboardHistoryLimit }))
-                }
-                value={settings.clipboardHistoryLimit}
-              />
-              <SettingRow description="自动跳过疑似密码、Token 等敏感文本。" label="忽略敏感内容">
-                <Toggle
-                  checked={settings.clipboardIgnoreSensitive}
-                  onChange={(event) =>
-                    updateSettings((current) => ({ ...current, clipboardIgnoreSensitive: event.target.checked }))
-                  }
-                >
-                  启用
-                </Toggle>
-              </SettingRow>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "storage" && (
-          <SettingsSection
-            description="查看 OCR、截图、剪贴板和模型缓存占用，并按需清理。"
-            title="缓存管理"
-          >
-            <div className="storage-summary">
-              <div>
-                <span>总占用</span>
-                <strong>{formatBytes(storageUsage?.total_bytes ?? 0)}</strong>
-                <small>
-                  {storageUsage ? `统计于 ${formatStorageTimestamp(storageUsage.generated_at)}` : "等待统计"}
-                </small>
-              </div>
-              <AppButton disabled={storageLoading} onClick={() => loadStorageUsage()} variant="primary">
-                {storageLoading ? "统计中..." : "刷新"}
-              </AppButton>
-            </div>
-            {storageError && <div className="storage-error">{storageError}</div>}
-            {storageMessage && <div className="storage-message">{storageMessage}</div>}
-            <div className="storage-list">
-              {(storageUsage?.items ?? []).map((item) => (
-                <article className="storage-item" key={item.id}>
-                  <div className="storage-item-main">
-                    <div className="storage-item-title">
-                      {cacheSelectionMode && (
-                        <input
-                          aria-label={`选择清理${item.label}`}
-                          checked={selectedCacheIds.includes(item.id)}
-                          disabled={storageLoading || !item.exists || item.file_count === 0}
-                          onChange={(event) => toggleCacheId(item.id, event.target.checked)}
-                          type="checkbox"
-                        />
-                      )}
-                      <strong>{item.label}</strong>
-                      <span>{item.description}</span>
-                    </div>
-                    <b>{formatBytes(item.size_bytes)}</b>
-                  </div>
-                  <div className="storage-item-meta">
-                    <span>{item.exists ? `${item.file_count} 个文件` : "路径尚未创建"}</span>
-                    <small title={item.path}>{item.path || "-"}</small>
-                  </div>
-                </article>
-              ))}
-              {!storageUsage && !storageLoading && !storageError && (
-                <div className="storage-empty">点击刷新查看本机存储占用。</div>
-              )}
-            </div>
-            <div className="storage-actions">
-              {!cacheSelectionMode ? (
-                <AppButton
-                  disabled={storageLoading || !storageUsage || storageUsage.items.length === 0}
-                  onClick={() => {
-                    setCacheSelectionMode(true);
-                    setStorageError("");
-                    setStorageMessage("");
-                  }}
-                >
-                  清理缓存
-                </AppButton>
-              ) : (
-                <>
-                  <AppButton
-                    disabled={storageLoading}
-                    onClick={() => {
-                      setCacheSelectionMode(false);
-                      setSelectedCacheIds([]);
-                      setStorageError("");
-                    }}
-                  >
-                    取消
-                  </AppButton>
-                  <AppButton
-                    disabled={storageLoading || selectedCacheIds.length === 0}
-                    onClick={clearSelectedCache}
-                    variant="primary"
-                  >
-                    清空已选缓存
-                  </AppButton>
-                </>
-              )}
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "shortcuts" && (
-          <SettingsSection
-            description="全局快捷键在主窗口隐藏时也能触发。点击输入框后按下组合键即可绑定；按 Esc 取消，按 Backspace 清除。"
-            footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}
-            title="快捷键"
-          >
-            <div className="settings-list">
-              <ShortcutRow
-                description="打开主窗口的 OCR 文件识别页。"
-                label="OCR"
-                onChange={(ocr) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, ocr },
-                  }))
-                }
-                value={settings.shortcutBindings.ocr}
-              />
-              <ShortcutRow
-                description="启动原生截图浮层，框选后保存为 PNG。"
-                label="截屏"
-                onChange={(screenshot) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, screenshot },
-                  }))
-                }
-                value={settings.shortcutBindings.screenshot}
-              />
-              <ShortcutRow
-                description="启动原生截图浮层，框选后直接送入 OCR 后端。"
-                label="截图 OCR"
-                onChange={(screenshotOcr) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, screenshotOcr },
-                  }))
-                }
-                value={settings.shortcutBindings.screenshotOcr}
-              />
-              <ShortcutRow
-                description="打开独立翻译弹框。"
-                label="翻译"
-                onChange={(translation) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, translation },
-                  }))
-                }
-                value={settings.shortcutBindings.translation}
-              />
-              <ShortcutRow
-                description="打开主窗口的剪贴板历史页面。"
-                label="剪贴板"
-                onChange={(clipboard) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, clipboard },
-                  }))
-                }
-                value={settings.shortcutBindings.clipboard}
-              />
-              <ShortcutRow
-                description="打开主窗口的系统设置页。"
-                label="打开设置"
-                onChange={(settingsValue) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    shortcutBindings: { ...current.shortcutBindings, settings: settingsValue },
-                  }))
-                }
-                value={settings.shortcutBindings.settings}
-              />
-              <div className="setting-row shortcuts-hint-row">
-                <div className="setting-row-copy">
-                  <strong>恢复默认快捷键</strong>
-                  <span>把上方所有绑定重置为默认值。</span>
-                </div>
-                <div className="setting-row-control">
-                  <AppButton
-                    onClick={() =>
-                      updateSettings((current) => ({
-                        ...current,
-                        shortcutBindings: { ...defaultShortcutBindings },
-                      }), true)
-                    }
-                  >
-                    重置快捷键
-                  </AppButton>
-                </div>
-              </div>
-            </div>
-          </SettingsSection>
-        )}
-
-        {activeSection === "backend" && (
-          <SettingsSection description="后端管理已归入设置，不再占用一级工具导航。" title="后端与扩展">
-            <div className={status?.ready ? "ready status" : "pending status"}>
-              <div>
-                <strong>{status?.ready ? "OCR 后端已就绪" : "OCR 后端未就绪"}</strong>
-                <span>{status?.message ?? "点击检查后端状态"}</span>
-              </div>
-              <div className="button-row">
-                <AppButton disabled={busy} onClick={onCheckBackend} variant="primary">
-                  检查后端
-                </AppButton>
-              </div>
-            </div>
-            <div className="backend-meta">
-              <div>
-                <span>内置后端命令</span>
-                <strong>{status?.backend_bin ?? "-"}</strong>
-              </div>
-              <div>
-                <span>App 数据目录</span>
-                <strong>{status?.app_data_dir ?? "-"}</strong>
-              </div>
-            </div>
-            <div className="section-head">
-              <div>
-                <strong>OCR 扩展</strong>
-                <span>导入包含 manifest.json 的本地扩展目录。</span>
-              </div>
-              <AppButton disabled={busy} onClick={onInstallExtension} variant="primary">
-                导入扩展
-              </AppButton>
-            </div>
-            <div className="extension-list">
-              {extensions.map((extension) => (
-                <article
-                  className={extension.installed ? "extension-card installed" : "extension-card"}
-                  key={extension.id}
-                >
-                  <div>
-                    <strong>{extension.name}</strong>
-                    <span>{extension.installed ? `版本 ${extension.version ?? "-"}` : extension.message}</span>
-                    {extension.entry && <small>{extension.entry}</small>}
-                  </div>
-                  {extension.installed ? (
-                    <AppButton
-                      disabled={busy}
-                      onClick={() => onUninstallExtension(extension.id, extension.name)}
-                      variant="text"
-                    >
-                      卸载
-                    </AppButton>
-                  ) : (
-                    <AppButton disabled={busy} onClick={onInstallExtension} variant="primary">
-                      导入
-                    </AppButton>
+              return (
+                <button
+                  className={cn(
+                    "group relative flex min-h-12 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-[background,opacity] duration-200 ease-out hover:bg-accent",
+                    active && "bg-accent",
                   )}
-                </article>
-              ))}
-            </div>
-            <pre className="log-box">{log || "等待操作。"}</pre>
-          </SettingsSection>
-        )}
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  type="button"
+                >
+                  <span
+                    className={cn(
+                      "absolute left-0 top-3 h-[calc(100%-24px)] w-[3px] rounded-full bg-transparent",
+                      active && "bg-foreground",
+                    )}
+                  />
+                  <Icon className="size-[18px] shrink-0 text-foreground" aria-hidden="true" strokeWidth={1.9} />
+                  <span className="min-w-0">
+                    <strong className="block truncate text-sm font-medium text-foreground">{section.label}</strong>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-        {activeSection === "about" && (
-          <SettingsSection description="墨识是面向 macOS 的本地识别与快捷工具箱。" title="关于">
-            <div className="about-grid">
-              <div>
-                <strong>版本</strong>
-                <span>0.1.0</span>
-              </div>
-              <div>
-                <strong>权限说明</strong>
-                <span>截图需要 macOS 屏幕录制权限；剪贴板功能会读写系统剪贴板。</span>
-              </div>
-              <div>
-                <strong>翻译说明</strong>
-                <span>启用翻译后，文本会发送到你配置的 API 服务。</span>
-              </div>
+          <Separator className="my-3" />
+          <div className="space-y-2 px-1">
+            <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-muted-foreground">
+              <span>版本 0.1.0</span>
+              <Button className="h-8 px-2" variant="ghost">
+                <RefreshCw />
+                更新
+              </Button>
             </div>
-          </SettingsSection>
-        )}
-      </div>
-    </Card>
+            <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
+              <span className="inline-flex items-center gap-2 text-foreground">
+                <Moon className="size-4" />
+                深色
+              </span>
+              <Switch
+                checked={settings.themePreference === "dark" || resolvedTheme === "dark"}
+                onCheckedChange={(checked) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    themePreference: checked ? "dark" : "light",
+                  }))
+                }
+              />
+            </div>
+          </div>
+        </aside>
+
+        <main className="min-h-0 overflow-auto rounded-xl border border-border/60 bg-card p-6 shadow-sm">
+          <div className="mx-auto flex max-w-6xl flex-col gap-8">
+            <SectionHeading description={sectionDescription(activeSection, resolvedTheme)} title={activeMeta.label} />
+
+            {activeSection === "general" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <SettingCard title="界面主题">
+                  <SettingItem
+                    description={`当前实际使用${resolvedTheme === "dark" ? "深色" : "浅色"}界面。`}
+                    icon={Monitor}
+                    title="界面主题"
+                  >
+                    <OptionToggleGroup
+                      options={themeOptions}
+                      value={settings.themePreference}
+                      onChange={(themePreference) => updateSettings((current) => ({ ...current, themePreference }))}
+                    />
+                  </SettingItem>
+                </SettingCard>
+                <Alert>
+                  <Info className="mr-2 inline size-4 align-[-2px]" />
+                  <AlertDescription className="inline">设置将在下次启动应用时继续沿用。</AlertDescription>
+                </Alert>
+              </SettingsSection>
+            )}
+
+            {activeSection === "ocr" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <SettingCard title="输出与引擎">
+                  <SettingItem description="默认输出 OCR 结果的位置。" icon={Folder} title="存储目录">
+                    <div className="grid w-[min(520px,50vw)] grid-cols-[minmax(0,1fr)_auto] gap-2 max-lg:w-full">
+                      <Input
+                        onChange={(event) => updateSettings((current) => ({ ...current, outputDir: event.target.value }))}
+                        placeholder="默认在文稿目录下创建 墨识/OCR"
+                        value={settings.outputDir}
+                      />
+                      <Button onClick={onChooseOutputDir} variant="outline">
+                        选择
+                      </Button>
+                    </div>
+                  </SettingItem>
+                  <SettingItem description="至少保留一种 OCR 输出格式。" icon={FileJson} title="输出格式">
+                    <div className="flex flex-wrap items-center justify-end gap-4">
+                      <SwitchRow
+                        checked={settings.outputTxt}
+                        disabled={settings.outputTxt && !settings.outputJson}
+                        label="TXT"
+                        onCheckedChange={(checked) =>
+                          updateSettings((current) => ({
+                            ...current,
+                            outputTxt: checked || !current.outputJson,
+                          }))
+                        }
+                      />
+                      <SwitchRow
+                        checked={settings.outputJson}
+                        disabled={settings.outputJson && !settings.outputTxt}
+                        label="JSON"
+                        onCheckedChange={(checked) =>
+                          updateSettings((current) => ({
+                            ...current,
+                            outputJson: checked || !current.outputTxt,
+                          }))
+                        }
+                      />
+                    </div>
+                  </SettingItem>
+                  <SettingItem description="Apple Vision 内置可用，PaddleOCR 需先安装扩展。" icon={Cpu} title="识别引擎">
+                    <OptionToggleGroup
+                      disabled={busy}
+                      options={engineOptions}
+                      value={settings.ocrEngine}
+                      onChange={(ocrEngine) => updateSettings((current) => ({ ...current, ocrEngine }))}
+                    />
+                  </SettingItem>
+                </SettingCard>
+
+                <SettingCard title="识别行为">
+                  <NumberItem
+                    description="用于 PDF 扫描页渲染，数值越高越清晰也越慢。"
+                    icon={Gauge}
+                    max={600}
+                    min={72}
+                    onChange={(dpi) => updateSettings((current) => ({ ...current, dpi }))}
+                    title="DPI"
+                    value={settings.dpi}
+                  />
+                  <SelectSettingItem
+                    description="用于提示 OCR 引擎按对应语言优化识别。"
+                    icon={Languages}
+                    onChange={(lang) => updateSettings((current) => ({ ...current, lang }))}
+                    options={ocrLanguageOptions}
+                    title="语言"
+                    value={settings.lang}
+                  />
+                  <NumberItem
+                    description="批量选择文件夹时向下扫描的目录层级。"
+                    icon={Folder}
+                    max={5}
+                    min={1}
+                    onChange={(recursionDepth) => updateSettings((current) => ({ ...current, recursionDepth }))}
+                    title="文件夹递归层级"
+                    value={settings.recursionDepth}
+                  />
+                  <SwitchItem
+                    checked={settings.clearOcrResultsBeforeRun}
+                    description="重新识别前清空旧结果列表和存储目录顶层 txt/json 输出文件。"
+                    icon={RotateCcw}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, clearOcrResultsBeforeRun: checked }))
+                    }
+                    title="识别前清空结果"
+                  />
+                  <SwitchItem
+                    checked={settings.forceOcr}
+                    description="忽略 PDF 自带文本层，逐页渲染后重新识别。"
+                    icon={ScanText}
+                    onCheckedChange={(checked) => updateSettings((current) => ({ ...current, forceOcr: checked }))}
+                    title="强制 OCR PDF 文本层"
+                  />
+                </SettingCard>
+              </SettingsSection>
+            )}
+
+            {activeSection === "translation" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <div className="grid gap-6 2xl:grid-cols-[260px_minmax(0,1fr)]">
+                  <Card className="h-fit overflow-hidden">
+                    <CardHeader className="p-6">
+                      <CardTitle>翻译引擎</CardTitle>
+                      <CardDescription>点击查看配置，启用后作为当前唯一引擎。</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-3 pt-0">
+                      {translationEngineOptions.map((option) => {
+                        const Icon = option.icon ?? Languages;
+                        const active = activeTranslationEngine === option.value;
+                        const enabled =
+                          option.value === "openai-compatible"
+                            ? settings.translationOpenaiEnabled
+                            : settings.translationVolcEnabled;
+
+                        return (
+                          <button
+                            className={cn(
+                              "grid min-h-[72px] w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-[background,border-color,opacity] duration-200 ease-out hover:bg-accent",
+                              active && "border-border bg-accent",
+                            )}
+                            key={option.value}
+                            onClick={() => setActiveTranslationEngine(option.value)}
+                            type="button"
+                          >
+                            <span className="flex size-10 items-center justify-center text-foreground">
+                              <Icon className="size-5 text-foreground" />
+                            </span>
+                            <span className="min-w-0">
+                              <strong className="block truncate text-sm font-medium text-foreground">{option.label}</strong>
+                              <span className="mt-1 block text-sm text-muted-foreground">
+                                {enabled ? "当前使用" : "可用配置"}
+                              </span>
+                            </span>
+                            <Button
+                              disabled={enabled}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                activateTranslationEngine(option.value);
+                              }}
+                              size="sm"
+                              variant={enabled ? "default" : "outline"}
+                            >
+                              {enabled ? "使用中" : "启用"}
+                            </Button>
+                          </button>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+
+                  <SettingCard title="引擎配置">
+                    {activeTranslationEngine === "openai-compatible" && (
+                      <>
+                        <TextItem
+                          description="例如 https://api.openai.com，或直接填 chat/completions 端点。"
+                          icon={Zap}
+                          onChange={(translationApiBaseUrl) =>
+                            updateSettings((current) => ({ ...current, translationApiBaseUrl }))
+                          }
+                          placeholder="https://api.openai.com"
+                          title="API Base URL"
+                          value={settings.translationApiBaseUrl}
+                        />
+                        <TextItem
+                          description="保存到本机 SQLite 设置库。"
+                          icon={KeyRound}
+                          onChange={(translationApiKey) =>
+                            updateSettings((current) => ({ ...current, translationApiKey }))
+                          }
+                          placeholder="sk-..."
+                          title="API Key"
+                          type="password"
+                          value={settings.translationApiKey}
+                        />
+                        <TextItem
+                          description="默认使用轻量模型。"
+                          icon={Bot}
+                          onChange={(translationModel) =>
+                            updateSettings((current) => ({ ...current, translationModel }))
+                          }
+                          title="模型"
+                          value={settings.translationModel}
+                        />
+                      </>
+                    )}
+                    {activeTranslationEngine === "volcengine" && (
+                      <>
+                        <TextItem
+                          description="火山引擎访问密钥 Access Key ID，保存到本机 SQLite 设置库。"
+                          icon={KeyRound}
+                          onChange={(translationVolcAccessKey) =>
+                            updateSettings((current) => ({ ...current, translationVolcAccessKey }))
+                          }
+                          placeholder="AK..."
+                          title="Access Key"
+                          value={settings.translationVolcAccessKey}
+                        />
+                        <TextItem
+                          description="火山引擎 Secret Access Key，保存到本机 SQLite 设置库。"
+                          icon={Shield}
+                          onChange={(translationVolcSecretKey) =>
+                            updateSettings((current) => ({ ...current, translationVolcSecretKey }))
+                          }
+                          placeholder="SK..."
+                          title="Secret Key"
+                          type="password"
+                          value={settings.translationVolcSecretKey}
+                        />
+                      </>
+                    )}
+                    <SettingItem description="简体中文自动译为英文，其他语言自动译为简体中文。" icon={Languages} title="语言方向">
+                      <span className="text-sm font-medium text-foreground">自动判断</span>
+                    </SettingItem>
+                  </SettingCard>
+                </div>
+              </SettingsSection>
+            )}
+
+            {activeSection === "screenshot" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <SettingCard title="截图">
+                  <SettingItem description="默认输出截图结果的位置。" icon={Image} title="截图保存目录">
+                    <div className="grid w-[min(520px,50vw)] grid-cols-[minmax(0,1fr)_auto] gap-2 max-lg:w-full">
+                      <Input
+                        onChange={(event) =>
+                          updateSettings((current) => ({ ...current, screenshotOutputDir: event.target.value }))
+                        }
+                        placeholder="默认在文稿目录下创建 墨识/Screenshots"
+                        value={settings.screenshotOutputDir}
+                      />
+                      <Button onClick={onChooseScreenshotOutputDir} variant="outline">
+                        选择
+                      </Button>
+                    </div>
+                  </SettingItem>
+                  <SwitchItem
+                    checked={settings.screenshotAutoOcr}
+                    description="普通截图后是否自动打开 OCR；默认关闭，使用工具栏 OCR 按钮。"
+                    icon={ScanText}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, screenshotAutoOcr: checked }))
+                    }
+                    title="截图后自动 OCR"
+                  />
+                  <SwitchItem
+                    checked={settings.screenshotKeepTemp}
+                    description="关闭后后续版本会在完成操作后清理临时截图。"
+                    icon={HardDrive}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, screenshotKeepTemp: checked }))
+                    }
+                    title="保留临时文件"
+                  />
+                  <SwitchItem
+                    checked={settings.ocrResultAutoCloseOnBlur}
+                    description="结果窗获得焦点后，点击其他应用或窗口时自动关闭。"
+                    icon={Crop}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, ocrResultAutoCloseOnBlur: checked }))
+                    }
+                    title="结果窗失焦自动关闭"
+                  />
+                </SettingCard>
+              </SettingsSection>
+            )}
+
+            {activeSection === "clipboard" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <SettingCard title="剪贴板">
+                  <SwitchItem
+                    checked={settings.clipboardRecordText}
+                    description="关闭后复制仍会写入系统剪贴板，但不进入历史。"
+                    icon={Clipboard}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, clipboardRecordText: checked }))
+                    }
+                    title="自动捕获系统复制"
+                  />
+                  <SettingItem description="控制剪贴板独立窗口和主页面的历史展示方式。" icon={LayoutPanelTop} title="显示样式">
+                    <OptionToggleGroup
+                      options={clipboardLayoutOptions}
+                      value={settings.clipboardLayout}
+                      onChange={(clipboardLayout) => updateSettings((current) => ({ ...current, clipboardLayout }))}
+                    />
+                  </SettingItem>
+                  <NumberItem
+                    description="超过上限后保留最新记录，置顶项不受裁剪影响。"
+                    icon={Database}
+                    max={500}
+                    min={10}
+                    onChange={(clipboardHistoryLimit) =>
+                      updateSettings((current) => ({ ...current, clipboardHistoryLimit }))
+                    }
+                    title="历史条数上限"
+                    value={settings.clipboardHistoryLimit}
+                  />
+                  <SwitchItem
+                    checked={settings.clipboardIgnoreSensitive}
+                    description="自动跳过疑似密码、Token 等敏感文本。"
+                    icon={Shield}
+                    onCheckedChange={(checked) =>
+                      updateSettings((current) => ({ ...current, clipboardIgnoreSensitive: checked }))
+                    }
+                    title="忽略敏感内容"
+                  />
+                </SettingCard>
+              </SettingsSection>
+            )}
+
+            {activeSection === "storage" && (
+              <SettingsSection>
+                <Card className="overflow-hidden">
+                  <CardContent className="flex min-h-28 items-center justify-between gap-6 p-6 max-sm:flex-col max-sm:items-start">
+                    <div>
+                      <span className="text-sm font-medium text-muted-foreground">总占用</span>
+                      <strong className="mt-2 block text-3xl font-bold text-foreground">
+                        {formatBytes(storageUsage?.total_bytes ?? 0)}
+                      </strong>
+                      <small className="mt-2 block text-sm text-muted-foreground">
+                        {storageUsage ? `统计于 ${formatStorageTimestamp(storageUsage.generated_at)}` : "等待统计"}
+                      </small>
+                    </div>
+                    <Button disabled={storageLoading} onClick={() => loadStorageUsage()}>
+                      <RefreshCw />
+                      {storageLoading ? "统计中..." : "刷新"}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {storageError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{storageError}</AlertDescription>
+                  </Alert>
+                )}
+                {storageMessage && (
+                  <Alert>
+                    <AlertDescription>{storageMessage}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="space-y-3">
+                  {(storageUsage?.items ?? []).map((item) => (
+                    <Card className="overflow-hidden" key={item.id}>
+                      <CardContent className="p-0">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-6 p-6 max-sm:grid-cols-1">
+                          <div className="flex min-w-0 gap-3">
+                            {cacheSelectionMode && (
+                              <input
+                                aria-label={`选择清理${item.label}`}
+                                checked={selectedCacheIds.includes(item.id)}
+                                className="mt-1 size-4 accent-foreground"
+                                disabled={storageLoading || !item.exists || item.file_count === 0}
+                                onChange={(event) => toggleCacheId(item.id, event.target.checked)}
+                                type="checkbox"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <strong className="text-sm font-medium text-foreground">{item.label}</strong>
+                              <span className="mt-1 block text-sm text-muted-foreground">{item.description}</span>
+                              <small className="mt-3 block truncate text-sm text-muted-foreground" title={item.path}>
+                                {item.path || "-"}
+                              </small>
+                            </div>
+                          </div>
+                          <div className="text-right max-sm:text-left">
+                            <b className="text-xl font-semibold text-foreground">{formatBytes(item.size_bytes)}</b>
+                            <span className="mt-2 block text-sm text-muted-foreground">
+                              {item.exists ? `${item.file_count} 个文件` : "路径尚未创建"}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {!storageUsage && !storageLoading && !storageError && (
+                    <Card>
+                      <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                        点击刷新查看本机存储占用。
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  {!cacheSelectionMode ? (
+                    <Button
+                      disabled={storageLoading || !storageUsage || storageUsage.items.length === 0}
+                      onClick={() => {
+                        setCacheSelectionMode(true);
+                        setStorageError("");
+                        setStorageMessage("");
+                      }}
+                      variant="outline"
+                    >
+                      清理缓存
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        disabled={storageLoading}
+                        onClick={() => {
+                          setCacheSelectionMode(false);
+                          setSelectedCacheIds([]);
+                          setStorageError("");
+                        }}
+                        variant="outline"
+                      >
+                        取消
+                      </Button>
+                      <Button disabled={storageLoading || selectedCacheIds.length === 0} onClick={clearSelectedCache}>
+                        清空已选缓存
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </SettingsSection>
+            )}
+
+            {activeSection === "shortcuts" && (
+              <SettingsSection footer={<SettingsActions busy={busy} onResetSettings={onResetSettings} />}>
+                <SettingCard title="快捷键">
+                  <ShortcutItem
+                    description="打开主窗口的 OCR 文件识别页。"
+                    icon={ScanText}
+                    onChange={(ocr) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, ocr },
+                      }))
+                    }
+                    title="OCR"
+                    value={settings.shortcutBindings.ocr}
+                  />
+                  <ShortcutItem
+                    description="启动原生截图浮层，框选后保存为 PNG。"
+                    icon={Crop}
+                    onChange={(screenshot) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, screenshot },
+                      }))
+                    }
+                    title="截屏"
+                    value={settings.shortcutBindings.screenshot}
+                  />
+                  <ShortcutItem
+                    description="启动原生截图浮层，框选后直接送入 OCR 后端。"
+                    icon={ScanText}
+                    onChange={(screenshotOcr) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, screenshotOcr },
+                      }))
+                    }
+                    title="截图 OCR"
+                    value={settings.shortcutBindings.screenshotOcr}
+                  />
+                  <ShortcutItem
+                    description="打开独立翻译弹框。"
+                    icon={Languages}
+                    onChange={(translation) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, translation },
+                      }))
+                    }
+                    title="翻译"
+                    value={settings.shortcutBindings.translation}
+                  />
+                  <ShortcutItem
+                    description="打开主窗口的剪贴板历史页面。"
+                    icon={Clipboard}
+                    onChange={(clipboard) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, clipboard },
+                      }))
+                    }
+                    title="剪贴板"
+                    value={settings.shortcutBindings.clipboard}
+                  />
+                  <ShortcutItem
+                    description="打开主窗口的系统设置页。"
+                    icon={Settings}
+                    onChange={(settingsValue) =>
+                      updateSettings((current) => ({
+                        ...current,
+                        shortcutBindings: { ...current.shortcutBindings, settings: settingsValue },
+                      }))
+                    }
+                    title="打开设置"
+                    value={settings.shortcutBindings.settings}
+                  />
+                  <SettingItem description="把上方所有绑定重置为默认值。" icon={RotateCcw} title="恢复默认快捷键">
+                    <Button
+                      onClick={() =>
+                        updateSettings(
+                          (current) => ({
+                            ...current,
+                            shortcutBindings: { ...defaultShortcutBindings },
+                          }),
+                          true,
+                        )
+                      }
+                      variant="outline"
+                    >
+                      重置快捷键
+                    </Button>
+                  </SettingItem>
+                </SettingCard>
+              </SettingsSection>
+            )}
+
+            {activeSection === "backend" && (
+              <SettingsSection>
+                <Card className="overflow-hidden">
+                  <CardContent className="flex items-center justify-between gap-6 p-6 max-sm:flex-col max-sm:items-start">
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-10 items-center justify-center text-foreground">
+                        <CheckCircle2 className="size-5 text-foreground" />
+                      </span>
+                      <div>
+                        <strong className="text-sm font-medium text-foreground">
+                          {status?.ready ? "OCR 后端已就绪" : "OCR 后端未就绪"}
+                        </strong>
+                        <span className="mt-1 block text-sm text-muted-foreground">
+                          {status?.message ?? "点击检查后端状态"}
+                        </span>
+                      </div>
+                    </div>
+                    <Button disabled={busy} onClick={onCheckBackend}>
+                      检查后端
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <MetaCard label="内置后端命令" value={status?.backend_bin ?? "-"} />
+                  <MetaCard label="App 数据目录" value={status?.app_data_dir ?? "-"} />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">OCR 扩展</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">导入包含 manifest.json 的本地扩展目录。</p>
+                  </div>
+                  <Button disabled={busy} onClick={onInstallExtension}>
+                    导入扩展
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {extensions.map((extension) => (
+                    <Card className="overflow-hidden" key={extension.id}>
+                      <CardContent className="grid min-h-[88px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-6">
+                        <div className="min-w-0">
+                          <strong className="text-sm font-medium text-foreground">{extension.name}</strong>
+                          <span className="mt-1 block text-sm text-muted-foreground">
+                            {extension.installed ? `版本 ${extension.version ?? "-"}` : extension.message}
+                          </span>
+                          {extension.entry && (
+                            <small className="mt-2 block truncate text-sm text-muted-foreground">{extension.entry}</small>
+                          )}
+                        </div>
+                        {extension.installed ? (
+                          <Button
+                            disabled={busy}
+                            onClick={() => onUninstallExtension(extension.id, extension.name)}
+                            variant="ghost"
+                          >
+                            卸载
+                          </Button>
+                        ) : (
+                          <Button disabled={busy} onClick={onInstallExtension}>
+                            导入
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <pre className="max-h-40 overflow-auto rounded-xl border border-border/60 bg-muted/40 p-4 text-sm text-muted-foreground">
+                  {log || "等待操作。"}
+                </pre>
+              </SettingsSection>
+            )}
+
+            {activeSection === "about" && (
+              <SettingsSection>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <MetaCard label="版本" value="0.1.0" />
+                  <MetaCard label="权限说明" value="截图需要 macOS 屏幕录制权限；剪贴板功能会读写系统剪贴板。" />
+                  <MetaCard label="翻译说明" value="启用翻译后，文本会发送到你配置的 API 服务。" />
+                </div>
+              </SettingsSection>
+            )}
+          </div>
+        </main>
+    </div>
   );
 }
 
-function SettingsSection({
-  children,
-  description,
-  footer,
-  title,
-}: {
-  children: ReactNode;
-  description: string;
-  footer?: ReactNode;
-  title: string;
-}) {
+function SectionHeading({ description, title }: { description: string; title: string }) {
   return (
-    <section className="settings-section">
-      <div className="settings-scroll">
-        <SectionTitle description={description} title={title} />
-        {children}
-      </div>
+    <div>
+      <h1 className="text-3xl font-bold tracking-normal text-foreground">{title}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function SettingsSection({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-8">
+      {children}
       {footer}
     </section>
   );
 }
 
-function SectionTitle({ description, title }: { description: string; title: string }) {
+function SettingCard({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <div className="section-title">
-      <h2>{title}</h2>
-      <span>{description}</span>
-    </div>
+    <Card className="overflow-hidden">
+      <CardHeader className="p-6 pb-4">
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <Separator />
+      <CardContent className="divide-y divide-border/60 p-0">{children}</CardContent>
+    </Card>
   );
 }
 
-function SettingsActions({
-  busy,
-  onResetSettings,
-}: {
-  busy: boolean;
-  onResetSettings: () => Promise<void>;
-}) {
+function SettingsActions({ busy, onResetSettings }: { busy: boolean; onResetSettings: () => Promise<void> }) {
   return (
-    <div className="button-row settings-actions">
-      <AppButton disabled={busy} onClick={onResetSettings}>
+    <div className="flex justify-end">
+      <Button disabled={busy} onClick={onResetSettings}>
+        <RotateCcw />
         恢复默认
-      </AppButton>
+      </Button>
     </div>
   );
 }
 
-function TextRow({
+function TextItem({
   description,
-  label,
+  icon,
   onChange,
   placeholder,
+  title,
   type = "text",
   value,
 }: {
   description: string;
-  label: string;
+  icon: ComponentType<LucideProps>;
   onChange: (value: string) => void;
   placeholder?: string;
+  title: string;
   type?: string;
   value: string;
 }) {
   return (
-    <SettingRow description={description} label={label}>
-      <input
+    <SettingItem description={description} icon={icon} title={title}>
+      <Input
+        className="w-[min(420px,42vw)] max-lg:w-full"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         type={type}
         value={value}
       />
-    </SettingRow>
+    </SettingItem>
   );
 }
 
-function NumberRow({
+function NumberItem({
   description,
-  label,
+  icon,
   max,
   min,
   onChange,
+  title,
   value,
 }: {
   description: string;
-  label: string;
+  icon: ComponentType<LucideProps>;
   max: number;
   min: number;
   onChange: (value: number) => void;
+  title: string;
   value: number;
 }) {
   return (
-    <SettingRow description={description} label={label}>
-      <input
+    <SettingItem description={description} icon={icon} title={title}>
+      <Input
+        className="w-32"
         max={max}
         min={min}
         onChange={(event) => onChange(clampNumber(Number(event.target.value || min), min, max))}
         type="number"
         value={value}
       />
-    </SettingRow>
+    </SettingItem>
   );
 }
 
-function ShortcutRow({
+function SelectSettingItem({
   description,
-  label,
+  icon,
   onChange,
+  options,
+  title,
   value,
 }: {
   description: string;
-  label: string;
+  icon: ComponentType<LucideProps>;
   onChange: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+  title: string;
   value: string;
 }) {
   return (
-    <SettingRow description={description} label={label}>
+    <SettingItem description={description} icon={icon} title={title}>
+      <AppSelect
+        ariaLabel={title}
+        className="w-[min(420px,42vw)] max-lg:w-full"
+        onChange={onChange}
+        options={options}
+        value={value}
+      />
+    </SettingItem>
+  );
+}
+
+function SwitchItem({
+  checked,
+  description,
+  icon,
+  onCheckedChange,
+  title,
+}: {
+  checked: boolean;
+  description: string;
+  icon: ComponentType<LucideProps>;
+  onCheckedChange: (checked: boolean) => void;
+  title: string;
+}) {
+  return (
+    <SettingItem description={description} icon={icon} title={title}>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </SettingItem>
+  );
+}
+
+function ShortcutItem({
+  description,
+  icon,
+  onChange,
+  title,
+  value,
+}: {
+  description: string;
+  icon: ComponentType<LucideProps>;
+  onChange: (value: string) => void;
+  title: string;
+  value: string;
+}) {
+  return (
+    <SettingItem description={description} icon={icon} title={title}>
       <ShortcutInput onChange={onChange} value={value} />
-    </SettingRow>
+    </SettingItem>
+  );
+}
+
+function SwitchRow({
+  checked,
+  disabled,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+      <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+      {label}
+    </label>
+  );
+}
+
+function OptionToggleGroup<TValue extends string>({
+  disabled = false,
+  onChange,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  onChange: (value: TValue) => void;
+  options: Array<Option<TValue>>;
+  value: TValue;
+}) {
+  return (
+    <ToggleGroup
+      className="grid w-[min(520px,50vw)] grid-cols-[repeat(var(--option-count),minmax(0,1fr))] rounded-xl border border-border/60 bg-muted/40 p-1 shadow-sm max-lg:w-full"
+      disabled={disabled}
+      onValueChange={(nextValue) => {
+        if (nextValue) {
+          onChange(nextValue as TValue);
+        }
+      }}
+      style={{ "--option-count": options.length } as CSSProperties}
+      type="single"
+      value={value}
+    >
+      {options.map((option) => {
+        const Icon = option.icon;
+
+        return (
+          <ToggleGroupItem
+            className="min-w-0 rounded-lg text-muted-foreground hover:bg-background hover:text-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground"
+            key={option.value}
+            value={option.value}
+          >
+            {Icon && <Icon className="size-4" />}
+            <span className="truncate">{option.label}</span>
+          </ToggleGroupItem>
+        );
+      })}
+    </ToggleGroup>
+  );
+}
+
+function MetaCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+        <strong className="mt-2 block break-words text-sm font-medium text-foreground">{value}</strong>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -946,22 +1182,14 @@ function formatStorageTimestamp(value: string) {
   return new Date(timestamp).toLocaleString("zh-CN", { hour12: false });
 }
 
-function SettingRow({
-  children,
-  description,
-  label,
-}: {
-  children: ReactNode;
-  description: string;
-  label: string;
-}) {
-  return (
-    <div className="setting-row">
-      <div className="setting-row-copy">
-        <strong>{label}</strong>
-        <span>{description}</span>
-      </div>
-      <div className="setting-row-control">{children}</div>
-    </div>
-  );
+function sectionDescription(section: SettingsCategory, resolvedTheme: ResolvedTheme) {
+  if (section === "general") return `管理界面主题和应用基础偏好，当前为${resolvedTheme === "dark" ? "深色" : "浅色"}界面。`;
+  if (section === "ocr") return "管理 OCR 输出位置、输出格式、引擎和 PDF 扫描行为。";
+  if (section === "translation") return "管理当前翻译引擎、密钥和语言偏好。";
+  if (section === "screenshot") return "截图和截图 OCR 是两个独立工具，普通截图可通过按钮快捷识别。";
+  if (section === "clipboard") return "自动捕获系统复制，支持文本、图片和文件历史。";
+  if (section === "storage") return "查看 OCR、截图、剪贴板和模型缓存占用，并按需清理。";
+  if (section === "shortcuts") return "全局快捷键在主窗口隐藏时也能触发。";
+  if (section === "backend") return "后端管理已归入设置，不再占用一级工具导航。";
+  return "墨识是面向 macOS 的本地识别与快捷工具箱。";
 }

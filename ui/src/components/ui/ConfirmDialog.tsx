@@ -1,6 +1,14 @@
-import { useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import { AppButton } from "./AppButton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./alert-dialog";
+import { cn } from "../../lib/utils";
 
 export type ConfirmDialogOptions = {
   cancelText?: string;
@@ -18,52 +26,32 @@ type ConfirmDialogProps = {
 };
 
 export function ConfirmDialog({ onCancel, onConfirm, open, options }: ConfirmDialogProps) {
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    confirmButtonRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onCancel();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, open]);
-
-  if (!open || !options) {
-    return null;
-  }
-
-  return createPortal(
-    <div className="dialog-layer" role="presentation">
-      <button aria-label="关闭确认框" className="dialog-backdrop" onClick={onCancel} type="button" />
-      <section
-        aria-describedby="confirm-dialog-description"
-        aria-modal="true"
-        className={`confirm-dialog ${options.tone ?? "default"}`}
-        role="alertdialog"
-      >
-        <div className="confirm-dialog-head">
-          <span aria-hidden="true" className="confirm-dialog-icon" />
-          <div>
-            <h2>{options.title}</h2>
-            <p id="confirm-dialog-description">{options.description}</p>
-          </div>
-        </div>
-        <div className="confirm-dialog-actions">
-          <AppButton onClick={onCancel}>{options.cancelText ?? "取消"}</AppButton>
-          <AppButton onClick={onConfirm} ref={confirmButtonRef} variant="primary">
-            {options.confirmText ?? "确认"}
-          </AppButton>
-        </div>
-      </section>
-    </div>,
-    document.body,
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onCancel();
+        }
+      }}
+    >
+      <AlertDialogContent className="rounded-2xl border-border/60 shadow-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{options?.title ?? "确认操作"}</AlertDialogTitle>
+          <AlertDialogDescription>{options?.description ?? ""}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{options?.cancelText ?? "取消"}</AlertDialogCancel>
+          <AlertDialogAction
+            className={cn(
+              options?.tone === "danger" && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            )}
+            onClick={onConfirm}
+          >
+            {options?.confirmText ?? "确认"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

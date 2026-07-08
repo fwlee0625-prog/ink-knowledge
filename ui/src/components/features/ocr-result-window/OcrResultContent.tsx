@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { AppButton, AppSelect, useMessage } from "../../ui";
 import { PinIcon, RefreshIcon, TranslateIcon } from "./OcrResultIcons";
+import { ocrLanguageOptions } from "../../../lib/ocrLanguages";
 import type { OcrEngine, OcrItem, OcrResultData } from "../../../types";
 
 type ImageSize = {
@@ -28,13 +29,6 @@ type OcrResultContentProps = {
   onRerun: (imagePath: string, engine: OcrEngine, language: string) => Promise<void>;
   onStartDrag: () => void;
 };
-
-const OCR_LANGUAGE_OPTIONS = [
-  { label: "中文简体", value: "ch" },
-  { label: "中文简体", value: "zh-Hans" },
-  { label: "中文繁体", value: "zh-Hant" },
-  { label: "英文", value: "en" },
-] satisfies { label: string; value: string }[];
 
 function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value));
@@ -239,7 +233,7 @@ export function OcrResultContent({
               ariaLabel="OCR 语言"
               className="ocr-language-select"
               onChange={setLanguage}
-              options={OCR_LANGUAGE_OPTIONS}
+              options={ocrLanguageOptions}
               value={language}
             />
           </footer>
