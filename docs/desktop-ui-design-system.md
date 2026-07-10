@@ -44,6 +44,7 @@ shadow-sm
 - Switch：使用 Radix Switch，不自定义二元开关。
 - ToggleGroup：用于主题、模式等分段控制，不用多个 Button 伪装；选中项使用 `bg-primary text-primary-foreground`，确保和未选中项有明确视觉区分。
 - Alert：底部提示使用 shadcn Alert，`bg-muted/40`，不使用蓝色或黄色提示底。
+- Kbd：快捷键、菜单加速器等键盘提示使用 `ui/src/components/ui/kbd.tsx` 的 `Kbd` / `KbdGroup`，避免在业务组件里手写键帽样式。
 - SettingItem：设置项统一采用左侧图标、标题、说明，右侧控制区的布局；高度约 `72px`。
 - Settings Sidebar：只展示图标和一级名称，不展示副标题，避免菜单占据过多宽度。
 
@@ -79,7 +80,7 @@ shadow-sm
 ## Implementation Notes
 
 - 新设置项优先复用 `ui/src/components/features/settings/SettingItem.tsx`。
-- 新基础组件优先通过 `pnpm dlx shadcn@latest add <component>` 添加到 `ui/src/components/ui/`；官方没有覆盖或需要项目适配时，再按 shadcn/Radix 结构补齐并从 `ui/src/components/ui/index.ts` 导出。
+- 新基础组件优先通过 `pnpm dlx shadcn@latest add <component>` 添加到 `ui/src/components/ui/`；官方没有覆盖或需要项目适配时，再按 shadcn/Radix 结构补齐并从 `ui/src/components/ui/index.ts` 导出。密钥输入统一使用 `SecretInput` 薄封装，复用 shadcn Input/Button 和 Eye/EyeOff 图标处理查看/隐藏。
 - shadcn 官方组件文件保持 CLI 默认小写命名，例如 `button.tsx`、`select.tsx`；业务兼容封装可以继续使用项目语义命名，例如 `AppButton.tsx`、`AppSelect.tsx`。
 - 新颜色先确认是否已有 shadcn 语义 token；确需新增时同时考虑浅色和深色模式。
 - 业务页面不直接写原生 `<select>`、自定义 switch 或临时按钮样式；先沉淀组件，再使用组件。

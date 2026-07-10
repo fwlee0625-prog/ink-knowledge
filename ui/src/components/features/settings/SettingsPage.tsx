@@ -43,6 +43,7 @@ import {
   CardTitle,
   Input,
   Separator,
+  SecretInput,
   ShortcutInput,
   Switch,
   ToggleGroup,
@@ -50,7 +51,6 @@ import {
 } from "../../ui";
 import { clampNumber, formatBytes } from "../../../lib/format";
 import { ocrLanguageOptions } from "../../../lib/ocrLanguages";
-import { defaultShortcutBindings } from "../../../lib/settings";
 import { cn } from "../../../lib/utils";
 import type {
   AppSettings,
@@ -447,14 +447,22 @@ export function SettingsPage({
                             : settings.translationVolcEnabled;
 
                         return (
-                          <button
+                          <div
+                            aria-label={`查看${option.label}配置`}
                             className={cn(
                               "grid min-h-[72px] w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-[background,border-color,opacity] duration-200 ease-out hover:bg-accent",
                               active && "border-border bg-accent",
                             )}
                             key={option.value}
                             onClick={() => setActiveTranslationEngine(option.value)}
-                            type="button"
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setActiveTranslationEngine(option.value);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
                           >
                             <span className="flex size-10 items-center justify-center text-foreground">
                               <Icon className="size-5 text-foreground" />
@@ -466,9 +474,13 @@ export function SettingsPage({
                               </span>
                             </span>
                             <Button
-                              disabled={enabled}
+                              aria-disabled={enabled}
+                              className={enabled ? "cursor-default" : ""}
                               onClick={(event) => {
                                 event.stopPropagation();
+                                if (enabled) {
+                                  return;
+                                }
                                 activateTranslationEngine(option.value);
                               }}
                               size="sm"
@@ -476,7 +488,7 @@ export function SettingsPage({
                             >
                               {enabled ? "使用中" : "启用"}
                             </Button>
-                          </button>
+                          </div>
                         );
                       })}
                     </CardContent>
@@ -542,9 +554,6 @@ export function SettingsPage({
                         />
                       </>
                     )}
-                    <SettingItem description="简体中文自动译为英文，其他语言自动译为简体中文。" icon={Languages} title="语言方向">
-                      <span className="text-sm font-medium text-foreground">自动判断</span>
-                    </SettingItem>
                   </SettingCard>
                 </div>
               </SettingsSection>
@@ -567,15 +576,6 @@ export function SettingsPage({
                       </Button>
                     </div>
                   </SettingItem>
-                  <SwitchItem
-                    checked={settings.screenshotAutoOcr}
-                    description="普通截图后是否自动打开 OCR；默认关闭，使用工具栏 OCR 按钮。"
-                    icon={ScanText}
-                    onCheckedChange={(checked) =>
-                      updateSettings((current) => ({ ...current, screenshotAutoOcr: checked }))
-                    }
-                    title="截图后自动 OCR"
-                  />
                   <SwitchItem
                     checked={settings.screenshotKeepTemp}
                     description="关闭后后续版本会在完成操作后清理临时截图。"
@@ -825,22 +825,6 @@ export function SettingsPage({
                     title="打开设置"
                     value={settings.shortcutBindings.settings}
                   />
-                  <SettingItem description="把上方所有绑定重置为默认值。" icon={RotateCcw} title="恢复默认快捷键">
-                    <Button
-                      onClick={() =>
-                        updateSettings(
-                          (current) => ({
-                            ...current,
-                            shortcutBindings: { ...defaultShortcutBindings },
-                          }),
-                          true,
-                        )
-                      }
-                      variant="outline"
-                    >
-                      重置快捷键
-                    </Button>
-                  </SettingItem>
                 </SettingCard>
               </SettingsSection>
             )}
@@ -992,15 +976,26 @@ function TextItem({
   type?: string;
   value: string;
 }) {
+  const revealable = type === "password";
+
   return (
     <SettingItem description={description} icon={icon} title={title}>
-      <Input
-        className="w-[min(420px,42vw)] max-lg:w-full"
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-      />
+      {revealable ? (
+        <SecretInput
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          value={value}
+          wrapperClassName="w-[min(420px,42vw)] max-lg:w-full"
+        />
+      ) : (
+        <Input
+          className="w-[min(420px,42vw)] max-lg:w-full"
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          type={type}
+          value={value}
+        />
+      )}
     </SettingItem>
   );
 }
@@ -1186,7 +1181,7 @@ function sectionDescription(section: SettingsCategory, resolvedTheme: ResolvedTh
   if (section === "general") return `管理界面主题和应用基础偏好，当前为${resolvedTheme === "dark" ? "深色" : "浅色"}界面。`;
   if (section === "ocr") return "管理 OCR 输出位置、输出格式、引擎和 PDF 扫描行为。";
   if (section === "translation") return "管理当前翻译引擎、密钥和语言偏好。";
-  if (section === "screenshot") return "截图和截图 OCR 是两个独立工具，普通截图可通过按钮快捷识别。";
+  if (section === "screenshot") return "管理截图保存位置、临时文件和截图 OCR 结果窗行为。";
   if (section === "clipboard") return "自动捕获系统复制，支持文本、图片和文件历史。";
   if (section === "storage") return "查看 OCR、截图、剪贴板和模型缓存占用，并按需清理。";
   if (section === "shortcuts") return "全局快捷键在主窗口隐藏时也能触发。";

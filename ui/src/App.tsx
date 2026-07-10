@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OcrPage } from "./components/features/ocr/OcrPage";
+import { isSupportedOcrFilePath, ocrFileExtensions, ocrImageExtensions } from "./components/features/ocr/ocrFileSupport";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
 import { useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
@@ -33,6 +34,7 @@ import type {
 } from "./types";
 
 const settingsSaveDebounceMs = 500;
+type FilePickerKind = "image" | "pdf" | "all";
 
 type PendingSettingsSave = {
   message: string;
@@ -252,41 +254,38 @@ export function App({ initialView = "ocr" }: AppProps) {
     });
   };
 
-  const confirmReplaceSelected = async () => {
-    if (selectedFiles.length === 0) {
-      return true;
+  const addSelectedFiles = (paths: string[]) => {
+    const incomingPaths = paths.filter(Boolean);
+    if (incomingPaths.length === 0) {
+      return 0;
     }
 
-    return confirm({
-      cancelText: "取消",
-      confirmText: "清空并选择",
-      description: "当前已选择文件列表有数据，继续操作会先清空现有列表。",
-      title: "重新选择",
-      tone: "warning",
+    const seen = new Set(selectedFiles);
+    const addedPaths = incomingPaths.filter((path) => {
+      if (seen.has(path)) {
+        return false;
+      }
+      seen.add(path);
+      return true;
     });
+    if (addedPaths.length > 0) {
+      setSelectedFiles((current) => [...current, ...addedPaths]);
+      setRecognizedFiles([]);
+    }
+    return addedPaths.length;
   };
 
-  const chooseFile = async () => {
+  const chooseFile = async (kind: FilePickerKind = "all") => {
     try {
-      if (!(await confirmReplaceSelected())) {
-        return;
-      }
-
       const selected = await open({
         multiple: true,
-        filters: [
-          {
-            name: "OCR Files",
-            extensions: ["pdf", "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
-          },
-        ],
+        filters: filePickerFilters(kind),
       });
 
       const paths = Array.isArray(selected) ? selected : typeof selected === "string" ? [selected] : [];
       if (paths.length > 0) {
-        setSelectedFiles(paths);
-        setRecognizedFiles([]);
-        setLog(`已选择 ${paths.length} 个文件。`);
+        const addedCount = addSelectedFiles(paths);
+        setLog(addedCount > 0 ? `已添加 ${addedCount} 个文件。` : "选择的文件已在列表中。");
       }
     } catch (error) {
       setLog(`选择文件失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -295,10 +294,6 @@ export function App({ initialView = "ocr" }: AppProps) {
 
   const chooseFolder = async () => {
     try {
-      if (!(await confirmReplaceSelected())) {
-        return;
-      }
-
       const selected = await open({
         multiple: false,
         directory: true,
@@ -315,9 +310,8 @@ export function App({ initialView = "ocr" }: AppProps) {
         },
       });
 
-      setSelectedFiles(paths);
-      setRecognizedFiles([]);
-      setLog(`已从文件夹找到 ${paths.length} 个支持的文件。`);
+      const addedCount = addSelectedFiles(paths);
+      setLog(`已从文件夹找到 ${paths.length} 个支持的文件，新增 ${addedCount} 个。`);
     } catch (error) {
       setLog(`选择文件夹失败: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -547,9 +541,6 @@ export function App({ initialView = "ocr" }: AppProps) {
       });
       setScreenshot(response);
       setLog(response.message);
-      if (settings.screenshotAutoOcr) {
-        await runScreenshotOcrPayload(response.image_path);
-      }
     });
   };
 
@@ -585,19 +576,59 @@ export function App({ initialView = "ocr" }: AppProps) {
     });
   };
 
+  const updateOcrSettings = (updater: (current: AppSettings) => AppSettings) => {
+    const nextSettings = updater(settings);
+    setSettings(nextSettings);
+    persistSettings(nextSettings);
+  };
+
+  const addDroppedFiles = async (paths: string[]) => {
+    const resolvedPaths: string[] = [];
+    for (const path of paths) {
+      if (isSupportedOcrFilePath(path)) {
+        resolvedPaths.push(path);
+        continue;
+      }
+
+      try {
+        const scannedPaths = await invoke<string[]>("scan_supported_files", {
+          request: {
+            root_dir: path,
+            max_depth: settings.recursionDepth,
+          },
+        });
+        resolvedPaths.push(...scannedPaths);
+      } catch {
+        // 不是支持文件也不是可扫描文件夹时忽略。
+      }
+    }
+
+    if (resolvedPaths.length === 0) {
+      setLog("拖入内容没有找到支持的文件。");
+      return;
+    }
+
+    const addedCount = addSelectedFiles(resolvedPaths);
+    setLog(addedCount > 0 ? `已拖入 ${addedCount} 个文件。` : "拖入的文件已在列表中。");
+  };
+
   return (
     <section className={view === "settings" ? "shell stack-page settings-shell" : "shell stack-page"}>
       {view === "ocr" && (
         <OcrPage
           busy={busy}
-          onChooseFile={chooseFile}
+          onAddDroppedFiles={addDroppedFiles}
+          onChooseImage={() => chooseFile("image")}
+          onChoosePdf={() => chooseFile("pdf")}
           onChooseFolder={chooseFolder}
           onClearFiles={() => setSelectedFiles([])}
           onRemoveFile={(path) => setSelectedFiles((current) => current.filter((item) => item !== path))}
           onRunOcr={runOcr}
+          onUpdateSettings={updateOcrSettings}
           progress={progress}
           recognizedFiles={recognizedFiles}
           selectedFiles={selectedFiles}
+          settings={settings}
         />
       )}
 
@@ -625,4 +656,19 @@ export function App({ initialView = "ocr" }: AppProps) {
       {confirmDialog}
     </section>
   );
+}
+
+function filePickerFilters(kind: FilePickerKind) {
+  if (kind === "image") {
+    return [{ name: "Images", extensions: ocrImageExtensions }];
+  }
+  if (kind === "pdf") {
+    return [{ name: "PDF", extensions: ["pdf"] }];
+  }
+  return [
+    {
+      name: "OCR Files",
+      extensions: ocrFileExtensions,
+    },
+  ];
 }

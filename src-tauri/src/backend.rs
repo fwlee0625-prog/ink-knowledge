@@ -339,7 +339,7 @@ fn is_supported_file(path: &Path) -> bool {
     };
     matches!(
         extension.to_ascii_lowercase().as_str(),
-        "pdf" | "png" | "jpg" | "jpeg" | "webp" | "bmp" | "tif" | "tiff"
+        "pdf" | "png" | "jpg" | "jpeg" | "webp" | "bmp" | "tif" | "tiff" | "heic" | "heif"
     )
 }
 

@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from .backends import OCRBackend
 from .models import OCRDocument, OCRItem
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp", ".heic", ".heif"}
 
 
 def recognize_path(

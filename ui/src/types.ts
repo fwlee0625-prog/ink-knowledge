@@ -50,6 +50,12 @@ export type ResultPreview = {
   truncated: boolean;
 };
 
+export type FileInfo = {
+  path: string;
+  name: string;
+  size: number;
+};
+
 export type StorageUsageItem = {
   id: string;
   label: string;
@@ -111,7 +117,6 @@ export type AppSettings = {
   translationVolcAccessKey: string;
   translationVolcSecretKey: string;
   screenshotOutputDir: string;
-  screenshotAutoOcr: boolean;
   screenshotKeepTemp: boolean;
   ocrResultAutoCloseOnBlur: boolean;
   clipboardRecordText: boolean;

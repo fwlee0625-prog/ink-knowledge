@@ -63,8 +63,8 @@ body,
   --dialog-shadow-soft: hsl(240 10% 3.9% / 0.1);
   --floating-window-border: hsl(var(--border) / 0.7);
   --floating-window-shadow:
-    0 22px 58px hsl(240 10% 3.9% / 0.2),
-    0 6px 18px hsl(240 10% 3.9% / 0.1);
+    0 6px 18px hsl(240 10% 3.9% / 0.07),
+    0 1px 4px hsl(240 10% 3.9% / 0.05);
   --scrollbar-size: 10px;
   --scrollbar-thumb: hsl(var(--foreground) / 0.18);
   --scrollbar-thumb-hover: hsl(var(--foreground) / 0.28);
@@ -108,8 +108,8 @@ body,
   --dialog-shadow-soft: hsl(0 0% 0% / 0.28);
   --floating-window-border: hsl(var(--border) / 0.8);
   --floating-window-shadow:
-    0 22px 58px hsl(0 0% 0% / 0.48),
-    0 6px 18px hsl(0 0% 0% / 0.32);
+    0 8px 24px hsl(0 0% 0% / 0.22),
+    0 2px 8px hsl(0 0% 0% / 0.14);
   --scrollbar-thumb: hsl(var(--foreground) / 0.22);
   --scrollbar-thumb-hover: hsl(var(--foreground) / 0.34);
   --scrollbar-thumb-active: hsl(var(--foreground) / 0.46);
@@ -178,7 +178,6 @@ textarea {
 }
 
 button {
-  border: 0;
   border-radius: 7px;
   cursor: pointer;
   font-weight: 700;
@@ -207,7 +206,7 @@ button {
   gap: 10px;
   height: 100vh;
   overflow: hidden;
-  padding: 18px clamp(28px, 3vw, 56px) 28px;
+  padding: 14px clamp(22px, 2.6vw, 48px) 18px;
 }
 
 .topbar,
@@ -310,10 +309,10 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 18px;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
   flex: 1;
-  min-height: 470px;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -354,6 +353,252 @@ h2 {
   padding: 18px;
 }
 
+.ocr-input-panel {
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.ocr-add-section,
+.ocr-config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  h2 {
+    margin: 0;
+    color: $text-strong;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+}
+
+.ocr-add-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ocr-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 46px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--foreground) / 0.14);
+  color: $text-strong;
+  background: $surface;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+
+  svg {
+    width: 16px;
+    height: 16px;
+    color: $text-soft;
+  }
+
+  &:hover {
+    border-color: hsl(var(--foreground) / 0.24);
+    background: $primary-hover;
+  }
+}
+
+.ocr-drop-zone {
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  min-height: 118px;
+  padding: 16px;
+  border: 1px dashed $border;
+  border-radius: 8px;
+  color: $muted-2;
+  background: $surface-muted;
+  text-align: center;
+  transition: border-color 160ms ease, background 160ms ease;
+
+  svg {
+    width: 34px;
+    height: 34px;
+    color: $text;
+  }
+
+  strong {
+    color: $text-strong;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  span {
+    font-size: 12px;
+  }
+
+  &.active {
+    border-color: $primary;
+    background: $primary-hover;
+  }
+}
+
+.ocr-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  label,
+  > span {
+    color: $text-strong;
+    font-size: 13px;
+    font-weight: 800;
+  }
+}
+
+.ocr-engine-select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid hsl(var(--foreground) / 0.14);
+  border-radius: 8px;
+  background: $surface;
+  font-size: 13px;
+  font-weight: 700;
+
+  &:hover {
+    border-color: hsl(var(--foreground) / 0.24);
+  }
+}
+
+.ocr-format-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.ocr-format-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: $text-strong;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  span {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid $border;
+    border-radius: 6px;
+    color: $surface;
+    background: $surface;
+    font-size: 18px;
+    line-height: 1;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  &.checked span {
+    border-color: $text;
+    color: $surface;
+    background: $text;
+  }
+
+  &:has(input:focus-visible) span {
+    box-shadow: 0 0 0 3px $primary-selected;
+  }
+
+  &:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+}
+
+.ocr-run-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 50px;
+  margin-top: auto;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 800;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-height: 760px) {
+  .shell {
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
+
+  .workspace {
+    gap: 12px;
+  }
+
+  .ocr-input-panel {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .ocr-add-section,
+  .ocr-config-section {
+    gap: 10px;
+
+    h2 {
+      font-size: 16px;
+    }
+  }
+
+  .ocr-add-button {
+    height: 40px;
+    font-size: 12px;
+  }
+
+  .ocr-drop-zone {
+    min-height: 96px;
+    padding: 12px;
+
+    svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    strong {
+      font-size: 13px;
+    }
+  }
+
+  .ocr-engine-select,
+  .app-select-trigger {
+    min-height: 38px;
+  }
+
+  .ocr-run-button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -388,7 +633,8 @@ h2 {
 }
 
 input,
-select {
+select,
+textarea {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -613,8 +859,7 @@ select {
 .file-list-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  flex: 1;
+  gap: 8px;
   min-height: 0;
 }
 
@@ -622,8 +867,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: $text-soft;
-  font-size: 13px;
+  color: $text-strong;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .text-button {
@@ -636,12 +882,12 @@ select {
 .empty-state,
 .empty-result {
   margin: 0;
-  padding: 14px;
+  padding: 10px 12px;
   border: 1px dashed $border;
   border-radius: 8px;
   color: $muted-2;
   background: $surface-muted;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .empty-result {
@@ -662,36 +908,152 @@ select {
 }
 
 .file-list {
-  flex: 1;
   overflow: auto;
-  max-height: none;
+  max-height: 190px;
+  gap: 0;
+  border: 1px solid $border-soft;
+  border-radius: 8px;
+  background: $surface;
 
   li {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
-    padding: 10px;
-    border: 1px solid $border-soft;
-    border-radius: 8px;
-    background: $surface-muted;
-  }
+    min-width: 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid $border-soft;
+    background: $surface;
 
-  strong,
-  span {
-    display: block;
-    overflow-wrap: anywhere;
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    > div {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .selected-file-icon {
+      align-self: center;
+      justify-self: center;
+    }
   }
 
   strong {
-    color: $text;
+    display: block;
+    overflow-wrap: anywhere;
+    overflow: hidden;
+    color: $text-strong;
     font-size: 13px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  span {
-    color: $muted-2;
-    font-size: 12px;
+}
+
+.selected-file-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: $text-soft;
+  line-height: 1;
+
+  svg {
+    width: 22px;
+    height: 22px;
+    display: block;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
+
+  text {
+    fill: currentColor;
+    stroke: none;
+    font-size: 5px;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+}
+
+.selected-file-main {
+  cursor: default;
+}
+
+.selected-file-tooltip {
+  width: max-content;
+  max-width: min(520px, 82vw);
+
+  dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  div {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+
+  dt {
+    color: hsl(var(--primary-foreground) / 0.68);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  dd {
+    min-width: 0;
+    max-width: min(440px, 72vw);
+    margin: 0;
+    overflow-wrap: break-word;
+    color: hsl(var(--primary-foreground));
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+}
+
+.file-remove-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: $text-soft;
+  background: transparent;
+  cursor: pointer;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  &:hover {
+    color: $danger;
+    background: $danger-soft;
+  }
+}
+
+.file-name-ellipsis {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .result {
@@ -705,12 +1067,12 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px;
+  padding: 14px 18px;
   border-bottom: 1px solid $border-soft;
 
   span {
     color: $muted-2;
-    font-size: 13px;
+    font-size: 12px;
   }
 }
 
@@ -745,7 +1107,7 @@ textarea {
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 14px;
-    align-items: start;
+    align-items: center;
     min-width: 0;
     padding: 14px;
     border: 1px solid $border-soft;
@@ -817,6 +1179,12 @@ textarea {
     font-size: 15px;
   }
 
+  .file-name-ellipsis {
+    color: $text;
+    font-size: 15px;
+    font-weight: 800;
+  }
+
   span {
     margin-top: 4px;
     color: $muted-2;
@@ -844,15 +1212,25 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  align-items: start;
+  align-items: center;
   padding: 18px;
   border-bottom: 1px solid $border-soft;
 
+  > div {
+    min-width: 0;
+  }
+
   strong {
     display: block;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     color: $text;
     font-size: 16px;
+  }
+
+  .file-name-ellipsis {
+    color: $text;
+    font-size: 16px;
+    font-weight: 800;
   }
 }
 
@@ -2119,6 +2497,27 @@ pre.preview-content {
   }
 }
 
+.translation-result-toolbar {
+  justify-content: space-between;
+}
+
+.translation-icon-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.translation-language-select {
+  width: 142px;
+  min-height: 32px;
+}
+
 .clipboard-control-panel {
   gap: 16px;
 }
@@ -2596,9 +2995,6 @@ pre.preview-content {
   border-radius: 7px;
   background: $surface-muted;
   color: $text;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 14px;
-  font-weight: 700;
   cursor: pointer;
   user-select: none;
   outline: none;
@@ -2617,6 +3013,11 @@ pre.preview-content {
   &:focus-visible {
     border-color: $primary;
   }
+}
+
+.shortcut-keycaps {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
 }
 
 .shortcut-placeholder {

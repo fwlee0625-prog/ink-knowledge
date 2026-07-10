@@ -70,6 +70,7 @@ pub fn run() {
             commands::delete_clipboard_item,
             commands::install_extension_from_dir,
             commands::get_default_settings,
+            commands::get_file_info,
             commands::get_default_shortcut_bindings,
             commands::get_pending_ocr_result,
             commands::get_storage_usage,

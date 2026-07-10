@@ -496,7 +496,7 @@ func renderPDFPage(_ page: PDFPage, pageNumber: Int, dpi: Int) throws -> (image:
 }
 
 func isSupportedImageExtension(_ ext: String) -> Bool {
-    ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].contains(ext)
+    ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "heic", "heif"].contains(ext)
 }
 
 func writeOutputs(_ document: OCRDocument, options: RecognizeOptions) throws {

@@ -90,7 +90,7 @@ struct CaptureArguments {
 
                 Options:
                   --output-dir DIR          PNG 输出目录
-                  --default-action ACTION   双击选区默认动作
+                  --default-action ACTION   选区默认动作
                   --service                 常驻服务模式，从 stdin 读取 JSONL 请求
                   --validate-args           只校验参数并输出 JSON，不启动截图浮层
                   --self-test-render        生成一张标注合成测试 PNG，不启动截图浮层
@@ -951,10 +951,15 @@ final class CaptureOverlayView: NSView {
             endSelectionTransform()
             return
         }
+        let didFinishNewSelection = isSelecting
         isSelecting = false
         guard let current = selection else { return }
         if current.width < minimumSelectionSize || current.height < minimumSelectionSize {
             selection = nil
+        }
+        if didFinishNewSelection, let selection, defaultAction == .ocr {
+            coordinator?.finish(action: .ocr, selection: selection, screen: screen, marks: marks)
+            return
         }
         updateCursor(at: convert(event.locationInWindow, from: nil))
         needsDisplay = true

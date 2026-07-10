@@ -71,6 +71,13 @@ pub struct ResultFileRequest {
 }
 
 #[derive(Debug, Serialize)]
+pub struct FileInfo {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ResultPreview {
     pub path: String,
     pub name: String,
@@ -179,6 +186,11 @@ pub async fn scan_supported_files(request: ScanFilesRequest) -> Result<Vec<Strin
 #[tauri::command]
 pub async fn preview_result_file(request: ResultFileRequest) -> Result<ResultPreview, String> {
     run_blocking(move || read_result_preview(request)).await
+}
+
+#[tauri::command]
+pub async fn get_file_info(request: ResultFileRequest) -> Result<FileInfo, String> {
+    run_blocking(move || read_file_info(request)).await
 }
 
 #[tauri::command]
@@ -512,6 +524,26 @@ fn file_name(path: &Path) -> String {
         .and_then(|value| value.to_str())
         .unwrap_or_default()
         .to_string()
+}
+
+fn read_file_info(request: ResultFileRequest) -> Result<FileInfo, String> {
+    let path = PathBuf::from(request.path.trim());
+    if !path.exists() {
+        return Err(format!("文件不存在: {}", path.display()));
+    }
+    if !path.is_file() {
+        return Err(format!("不是文件: {}", path.display()));
+    }
+
+    let metadata = path
+        .metadata()
+        .map_err(|error| format!("读取文件信息失败: {error}"))?;
+
+    Ok(FileInfo {
+        path: path.display().to_string(),
+        name: file_name(&path),
+        size: metadata.len(),
+    })
 }
 
 fn open_path(path: PathBuf) -> Result<(), String> {

@@ -7,6 +7,7 @@ use std::process::Command;
 pub struct TranslateRequest {
     pub text: String,
     pub engine: Option<String>,
+    pub target_language: Option<String>,
     pub api_base_url: Option<String>,
     pub api_key: Option<String>,
     pub model: Option<String>,
@@ -21,23 +22,29 @@ pub struct TranslateResponse {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum TranslationDirection {
-    SimplifiedChineseToEnglish,
-    OtherToSimplifiedChinese,
+enum TranslationTarget {
+    SimplifiedChinese,
+    English,
+    Japanese,
+    Korean,
 }
 
-impl TranslationDirection {
+impl TranslationTarget {
     fn openai_target_label(self) -> &'static str {
         match self {
-            Self::SimplifiedChineseToEnglish => "English",
-            Self::OtherToSimplifiedChinese => "Simplified Chinese",
+            Self::SimplifiedChinese => "Simplified Chinese",
+            Self::English => "English",
+            Self::Japanese => "Japanese",
+            Self::Korean => "Korean",
         }
     }
 
     fn volc_target_language(self) -> &'static str {
         match self {
-            Self::SimplifiedChineseToEnglish => "en",
-            Self::OtherToSimplifiedChinese => "zh",
+            Self::SimplifiedChinese => "zh",
+            Self::English => "en",
+            Self::Japanese => "ja",
+            Self::Korean => "ko",
         }
     }
 }
@@ -47,7 +54,7 @@ pub fn translate_text(request: TranslateRequest) -> Result<TranslateResponse, St
     if text.is_empty() {
         return Err("请输入需要翻译的文本。".to_string());
     }
-    let direction = infer_translation_direction(text);
+    let target = resolve_translation_target(text, request.target_language.as_deref())?;
 
     match request
         .engine
@@ -57,9 +64,9 @@ pub fn translate_text(request: TranslateRequest) -> Result<TranslateResponse, St
         .unwrap_or("openai-compatible")
     {
         "openai-compatible" | "openai" => {
-            translate_with_openai_compatible(&request, text, direction)
+            translate_with_openai_compatible(&request, text, target)
         }
-        "volcengine" | "volc" => translate_with_volcengine(&request, text, direction),
+        "volcengine" | "volc" => translate_with_volcengine(&request, text, target),
         engine => Err(format!("不支持的翻译引擎: {engine}")),
     }
 }
@@ -67,7 +74,7 @@ pub fn translate_text(request: TranslateRequest) -> Result<TranslateResponse, St
 fn translate_with_openai_compatible(
     request: &TranslateRequest,
     text: &str,
-    direction: TranslationDirection,
+    target: TranslationTarget,
 ) -> Result<TranslateResponse, String> {
     let api_key = request
         .api_key
@@ -88,13 +95,13 @@ fn translate_with_openai_compatible(
         "messages": [
             {
                 "role": "system",
-                "content": "You are a precise translation engine. Return only the translated text. Translate Simplified Chinese into English. Translate every other language into Simplified Chinese."
+                "content": "You are a precise translation engine. Return only the translated text. Translate the user's text into the requested target language."
             },
             {
                 "role": "user",
                 "content": format!(
                     "Target language: {}.\n\nText:\n{text}",
-                    direction.openai_target_label()
+                    target.openai_target_label()
                 )
             }
         ],
@@ -149,7 +156,7 @@ fn translate_with_openai_compatible(
 fn translate_with_volcengine(
     request: &TranslateRequest,
     text: &str,
-    direction: TranslationDirection,
+    target: TranslationTarget,
 ) -> Result<TranslateResponse, String> {
     const HOST: &str = "translate.volcengineapi.com";
     const REGION: &str = "cn-north-1";
@@ -172,7 +179,7 @@ fn translate_with_volcengine(
     let mut payload = Map::new();
     payload.insert(
         "TargetLanguage".to_string(),
-        json!(direction.volc_target_language()),
+        json!(target.volc_target_language()),
     );
     payload.insert("TextList".to_string(), json!([text]));
     let payload = Value::Object(payload);
@@ -265,11 +272,22 @@ fn normalize_endpoint(value: Option<&str>) -> Result<String, String> {
     ))
 }
 
-fn infer_translation_direction(text: &str) -> TranslationDirection {
+fn resolve_translation_target(text: &str, value: Option<&str>) -> Result<TranslationTarget, String> {
+    match value.map(str::trim).filter(|item| !item.is_empty()).unwrap_or("auto") {
+        "auto" => Ok(infer_translation_target(text)),
+        "zh" | "zh-Hans" | "zh_cn" | "zh-CN" => Ok(TranslationTarget::SimplifiedChinese),
+        "en" | "en-US" | "en-GB" => Ok(TranslationTarget::English),
+        "ja" | "jp" | "ja-JP" => Ok(TranslationTarget::Japanese),
+        "ko" | "ko-KR" => Ok(TranslationTarget::Korean),
+        language => Err(format!("不支持的翻译目标语言: {language}")),
+    }
+}
+
+fn infer_translation_target(text: &str) -> TranslationTarget {
     if is_likely_simplified_chinese(text) {
-        TranslationDirection::SimplifiedChineseToEnglish
+        TranslationTarget::English
     } else {
-        TranslationDirection::OtherToSimplifiedChinese
+        TranslationTarget::SimplifiedChinese
     }
 }
 

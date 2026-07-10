@@ -1,31 +1,49 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
-import { AppButton, Card, EmptyState } from "../../ui";
-import { fileName, ocrButtonLabel } from "../../../lib/format";
-import type { RecognitionFile, RecognitionProgress, ResultPreview } from "../../../types";
+import { Check, File as GenericFileIcon, FileImage, Play, X } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { AppButton, AppSelect, Card, EmptyState, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../ui";
+import { fileName, formatBytes, ocrButtonLabel } from "../../../lib/format";
+import type { AppSettings, FileInfo, OcrEngine, RecognitionFile, RecognitionProgress, ResultPreview } from "../../../types";
+import { OcrFileInputPanel } from "./OcrFileInputPanel";
+import { getOcrFileKind, type OcrFileKind } from "./ocrFileSupport";
 
 type OcrPageProps = {
   busy: boolean;
   progress: RecognitionProgress;
   recognizedFiles: RecognitionFile[];
   selectedFiles: string[];
+  settings: AppSettings;
+  onAddDroppedFiles: (paths: string[]) => void | Promise<void>;
   onClearFiles: () => void;
-  onChooseFile: () => Promise<void>;
+  onChooseImage: () => Promise<void>;
+  onChoosePdf: () => Promise<void>;
   onChooseFolder: () => Promise<void>;
   onRemoveFile: (path: string) => void;
   onRunOcr: () => Promise<void>;
+  onUpdateSettings: (updater: (current: AppSettings) => AppSettings) => void;
 };
+
+type OutputFormat = "txt" | "json";
+
+const engineOptions: Array<{ label: string; value: OcrEngine }> = [
+  { label: "Apple Vision（推荐）", value: "apple-vision" },
+  { label: "PaddleOCR 扩展", value: "paddle" },
+];
 
 export function OcrPage({
   busy,
   progress,
   recognizedFiles,
   selectedFiles,
-  onChooseFile,
+  settings,
+  onAddDroppedFiles,
+  onChooseImage,
+  onChoosePdf,
   onChooseFolder,
   onClearFiles,
   onRemoveFile,
   onRunOcr,
+  onUpdateSettings,
 }: OcrPageProps) {
   const [activeResultPath, setActiveResultPath] = useState<string | null>(null);
   const [preview, setPreview] = useState<ResultPreview | null>(null);
@@ -98,50 +116,81 @@ export function OcrPage({
     setPreviewError("");
   };
 
+  const updateOutputFormat = (format: OutputFormat, checked: boolean) => {
+    onUpdateSettings((current) => {
+      if (format === "txt") {
+        return { ...current, outputTxt: checked || !current.outputJson };
+      }
+      return { ...current, outputJson: checked || !current.outputTxt };
+    });
+  };
+
   return (
-    <section className={activeResultPath ? "workspace main-workspace with-result-preview" : "workspace main-workspace"}>
-      <Card className="panel">
-        <div className="field">
-          <span>文件</span>
-          <div className="picker-actions">
-            <AppButton id="chooseFile" onClick={onChooseFile} variant="file">
-              选择图片或 PDF
-            </AppButton>
-            <AppButton id="chooseFolder" onClick={onChooseFolder} variant="file">
-              选择文件夹
-            </AppButton>
-          </div>
-        </div>
-
-        <AppButton disabled={busy} id="runOcr" onClick={onRunOcr} variant="primary">
-          {ocrButtonLabel(busy, progress)}
-        </AppButton>
-
-        <SelectedFileList
-          files={selectedFiles}
-          onClear={onClearFiles}
-          onRemoveFile={onRemoveFile}
-          title={`已选择 ${selectedFiles.length} 个文件`}
-        />
-      </Card>
-
-      <Card className="result">
-        <div className="result-head">
-          <div>
-            <h2>识别文件</h2>
-          </div>
-          <span>{recognizedFiles.length > 0 ? `${recognizedFiles.length} 个文件` : "等待识别"}</span>
-        </div>
-        {recognizedFiles.length === 0 ? (
-          <RecognizedFileList
-            activePath={activeResultPath}
-            files={recognizedFiles}
-            onOpen={openResultFile}
-            onPreview={setActiveResultPath}
-            onReveal={revealResultFile}
+    <TooltipProvider delayDuration={300}>
+      <section className={activeResultPath ? "workspace main-workspace with-result-preview" : "workspace main-workspace"}>
+        <Card className="panel ocr-input-panel">
+          <OcrFileInputPanel
+            busy={busy}
+            onChooseFolder={onChooseFolder}
+            onChooseImage={onChooseImage}
+            onChoosePdf={onChoosePdf}
+            onDropPaths={onAddDroppedFiles}
           />
-        ) : (
-          <div className="result-body">
+
+          <SelectedFileList
+            files={selectedFiles}
+            onClear={onClearFiles}
+            onRemoveFile={onRemoveFile}
+            title={`已选择 ${selectedFiles.length} 个文件`}
+          />
+
+          <section className="ocr-config-section">
+            <h2>OCR 配置</h2>
+            <div className="ocr-config-field">
+              <label>识别引擎</label>
+              <AppSelect
+                ariaLabel="识别引擎"
+                className="ocr-engine-select"
+                disabled={busy}
+                onChange={(ocrEngine) => onUpdateSettings((current) => ({ ...current, ocrEngine }))}
+                options={engineOptions}
+                value={settings.ocrEngine}
+              />
+            </div>
+
+            <div className="ocr-config-field">
+              <span>输出格式</span>
+              <div className="ocr-format-row">
+                <OutputFormatToggle
+                  checked={settings.outputTxt}
+                  disabled={settings.outputTxt && !settings.outputJson}
+                  label="TXT"
+                  onChange={(checked) => updateOutputFormat("txt", checked)}
+                />
+                <OutputFormatToggle
+                  checked={settings.outputJson}
+                  disabled={settings.outputJson && !settings.outputTxt}
+                  label="JSON"
+                  onChange={(checked) => updateOutputFormat("json", checked)}
+                />
+              </div>
+            </div>
+          </section>
+
+          <AppButton className="ocr-run-button" disabled={busy} id="runOcr" onClick={onRunOcr} variant="primary">
+            <Play />
+            {ocrButtonLabel(busy, progress)}
+          </AppButton>
+        </Card>
+
+        <Card className="result">
+          <div className="result-head">
+            <div>
+              <h2>识别文件</h2>
+            </div>
+            <span>{recognizedFiles.length > 0 ? `${recognizedFiles.length} 个文件` : "等待识别"}</span>
+          </div>
+          {recognizedFiles.length === 0 ? (
             <RecognizedFileList
               activePath={activeResultPath}
               files={recognizedFiles}
@@ -149,19 +198,29 @@ export function OcrPage({
               onPreview={setActiveResultPath}
               onReveal={revealResultFile}
             />
-          </div>
-        )}
-      </Card>
+          ) : (
+            <div className="result-body">
+              <RecognizedFileList
+                activePath={activeResultPath}
+                files={recognizedFiles}
+                onOpen={openResultFile}
+                onPreview={setActiveResultPath}
+                onReveal={revealResultFile}
+              />
+            </div>
+          )}
+        </Card>
 
-      {activeResultPath && (
-        <ResultPreviewPanel
-          error={previewError}
-          file={activeResult}
-          onClose={closePreview}
-          preview={preview}
-        />
-      )}
-    </section>
+        {activeResultPath && (
+          <ResultPreviewPanel
+            error={previewError}
+            file={activeResult}
+            onClose={closePreview}
+            preview={preview}
+          />
+        )}
+      </section>
+    </TooltipProvider>
   );
 }
 
@@ -173,6 +232,33 @@ type SelectedFileListProps = {
 };
 
 function SelectedFileList({ files, onClear, onRemoveFile, title }: SelectedFileListProps) {
+  const [fileInfoByPath, setFileInfoByPath] = useState<Record<string, FileInfo>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (files.length === 0) {
+      setFileInfoByPath({});
+      return;
+    }
+
+    Promise.all(
+      files.map((path) =>
+        invoke<FileInfo>("get_file_info", { request: { path } })
+          .then((info) => [path, info] as const)
+          .catch(() => [path, { path, name: fileName(path), size: 0 }] as const),
+      ),
+    ).then((entries) => {
+      if (!cancelled) {
+        setFileInfoByPath(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files]);
+
   return (
     <div className="file-list-block">
       <div className="list-head">
@@ -190,18 +276,105 @@ function SelectedFileList({ files, onClear, onRemoveFile, title }: SelectedFileL
         <ul className="file-list">
           {files.map((path) => (
             <li key={path}>
-              <div>
-                <strong>{fileName(path)}</strong>
-                <span>{path}</span>
-              </div>
-              <AppButton onClick={() => onRemoveFile(path)} variant="text">
-                移除
-              </AppButton>
+              <SelectedFileTooltip info={fileInfoByPath[path]} path={path}>
+                <div className="selected-file-main">
+                  <SelectedFileIcon kind={getOcrFileKind(path)} />
+                  <strong className="file-name-ellipsis">{fileInfoByPath[path]?.name ?? fileName(path)}</strong>
+                </div>
+              </SelectedFileTooltip>
+              <button aria-label={`移除 ${fileName(path)}`} className="file-remove-button" onClick={() => onRemoveFile(path)} type="button">
+                <X />
+              </button>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function SelectedFileTooltip({ children, info, path }: { children: ReactNode; info?: FileInfo; path: string }) {
+  const name = info?.name ?? fileName(path);
+  const size = info ? formatBytes(info.size) : "读取中...";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent align="start" className="selected-file-tooltip" side="top">
+        <dl>
+          <div>
+            <dt>名称</dt>
+            <dd>{name}</dd>
+          </div>
+          <div>
+            <dt>路径</dt>
+            <dd>{path}</dd>
+          </div>
+          <div>
+            <dt>大小</dt>
+            <dd>{size}</dd>
+          </div>
+        </dl>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SelectedFileIcon({ kind }: { kind: OcrFileKind }) {
+  const label = kind === "image" ? "图片文件" : kind === "pdf" ? "PDF 文件" : "文件";
+
+  if (kind === "pdf") {
+    return (
+      <span aria-label={label} className="selected-file-icon pdf" title={label}>
+        <PdfFileIcon />
+      </span>
+    );
+  }
+
+  const Icon = kind === "image" ? FileImage : GenericFileIcon;
+  return (
+    <span aria-label={label} className={`selected-file-icon ${kind}`} title={label}>
+      <Icon />
+    </span>
+  );
+}
+
+function PdfFileIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8.4L20 7.6V20a2 2 0 0 1-2 2H6Z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <text x="12" y="17.2" textAnchor="middle">
+        PDF
+      </text>
+    </svg>
+  );
+}
+
+function OutputFormatToggle({
+  checked,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={checked ? "ocr-format-toggle checked" : "ocr-format-toggle"}>
+      <input
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        type="checkbox"
+      />
+      <span>{checked && <Check />}</span>
+      <strong>{label}</strong>
+    </label>
   );
 }
 
@@ -231,7 +404,7 @@ function RecognizedFileList({ activePath, files, onOpen, onPreview, onReveal }: 
           }}
         >
           <div className="recognized-main">
-            <strong>{file.name}</strong>
+            <FileNameTooltip name={file.name} />
             {file.status === "error" && <small>{file.message}</small>}
           </div>
           <div className="recognized-actions">
@@ -292,7 +465,7 @@ function ResultPreviewPanel({ error, file, preview, onClose }: ResultPreviewPane
     <section className="result-preview">
       <div className="preview-head">
         <div>
-          <strong>{preview?.name ?? fileName(file.outputPath)}</strong>
+          <FileNameTooltip name={preview?.name ?? fileName(file.outputPath)} />
         </div>
         <button aria-label="关闭预览" className="preview-close-button" onClick={onClose} title="关闭预览" type="button">
           ×
@@ -307,6 +480,19 @@ function ResultPreviewPanel({ error, file, preview, onClose }: ResultPreviewPane
         </>
       )}
     </section>
+  );
+}
+
+function FileNameTooltip({ name }: { name: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <strong className="file-name-ellipsis">{name}</strong>
+      </TooltipTrigger>
+      <TooltipContent align="start" className="max-w-[min(560px,80vw)] break-all leading-relaxed" side="top">
+        {name}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

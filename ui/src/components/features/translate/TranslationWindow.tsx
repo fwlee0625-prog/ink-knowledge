@@ -1,9 +1,10 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { Copy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { PinIcon, TranslateIcon } from "../ocr-result-window/OcrResultIcons";
-import { AppButton, useMessage } from "../../ui";
+import { AppButton, AppSelect, useMessage } from "../../ui";
 import { useFloatingWindowAutoClose } from "../floating-window/useFloatingWindowAutoClose";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
 import { resolveTranslationEngine } from "../../../lib/translation";
@@ -15,10 +16,20 @@ type InlineMessage = {
 };
 
 type ClipboardSource = "manual" | "ocr" | "translation" | "clipboard";
+type TranslationTargetLanguage = "auto" | "zh" | "en" | "ja" | "ko";
+
+const translationTargetOptions: Array<{ label: string; value: TranslationTargetLanguage }> = [
+  { label: "自动检测", value: "auto" },
+  { label: "简体中文", value: "zh" },
+  { label: "英文", value: "en" },
+  { label: "日文", value: "ja" },
+  { label: "韩文", value: "ko" },
+];
 
 export function TranslationWindow() {
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
+  const [targetLanguage, setTargetLanguage] = useState<TranslationTargetLanguage>("auto");
   const [notice, setNotice] = useState<InlineMessage | null>(null);
   const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
   const [translating, setTranslating] = useState(false);
@@ -103,6 +114,7 @@ export function TranslationWindow() {
         request: {
           text: source,
           engine: selectedEngine,
+          target_language: targetLanguage,
           api_base_url: settings.translationApiBaseUrl,
           api_key: settings.translationApiKey,
           model: settings.translationModel,
@@ -175,8 +187,15 @@ export function TranslationWindow() {
               >
                 {translating ? "翻译中..." : "翻译"}
               </AppButton>
-              <AppButton disabled={!source.trim()} onClick={() => copyText(source, "manual")} variant="text">
-                复制原文
+              <AppButton
+                aria-label="复制原文"
+                className="translation-icon-button"
+                disabled={!source.trim()}
+                onClick={() => copyText(source, "manual")}
+                title="复制原文"
+                variant="text"
+              >
+                <Copy aria-hidden="true" />
               </AppButton>
               {notice && <p className={`tool-message ${notice.tone}`}>{notice.text}</p>}
             </footer>
@@ -190,10 +209,24 @@ export function TranslationWindow() {
               spellCheck={false}
               value={target}
             />
-            <footer className="translation-pane-toolbar">
-              <AppButton disabled={!target.trim()} onClick={() => copyText(target, "translation")} variant="text">
-                复制译文
+            <footer className="translation-pane-toolbar translation-result-toolbar">
+              <AppButton
+                aria-label="复制译文"
+                className="translation-icon-button"
+                disabled={!target.trim()}
+                onClick={() => copyText(target, "translation")}
+                title="复制译文"
+                variant="text"
+              >
+                <Copy aria-hidden="true" />
               </AppButton>
+              <AppSelect
+                ariaLabel="选择译文目标语言"
+                className="translation-language-select"
+                onChange={setTargetLanguage}
+                options={translationTargetOptions}
+                value={targetLanguage}
+              />
             </footer>
           </section>
         </div>

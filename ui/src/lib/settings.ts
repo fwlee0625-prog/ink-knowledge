@@ -35,7 +35,6 @@ export const fallbackSettings: AppSettings = {
   translationVolcAccessKey: "",
   translationVolcSecretKey: "",
   screenshotOutputDir: "",
-  screenshotAutoOcr: false,
   screenshotKeepTemp: true,
   ocrResultAutoCloseOnBlur: true,
   clipboardRecordText: true,
@@ -67,6 +66,7 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   const saved = { ...(value ?? {}) };
   delete (saved as Record<string, unknown>).colorCopyFormat;
   delete (saved as Record<string, unknown>).colorHistoryLimit;
+  delete (saved as Record<string, unknown>).screenshotAutoOcr;
   if (typeof saved.screenshotOutputDir === "string" && saved.screenshotOutputDir.trim() === "") {
     delete saved.screenshotOutputDir;
   }
