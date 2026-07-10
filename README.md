@@ -27,6 +27,7 @@
 - PaddleOCR 作为扩展高精度引擎引入，未安装扩展时不会下载 PaddleOCR 或模型
 - 可切换 OCR 引擎，后续可继续接入其他识别后端
 - 为 OCR、截屏、截图 OCR、翻译、剪贴板、打开设置提供全局快捷键，默认绑定如下：`Alt+Shift+O`（OCR）、`Alt+Shift+S`（截屏）、`Alt+Shift+X`（截图 OCR）、`Alt+Shift+T`（翻译）、`Alt+Shift+V`（剪贴板）、`Alt+Shift+,`（打开设置）；快捷键可在「系统设置 > 快捷键」中自定义，控件失焦自动保存后立即生效
+- 启动后会静默检查公开 GitHub 仓库的最新正式 Release；「系统设置 > 关于」可手动检查、下载新版 DMG，并查看随应用内置的完整更新日志
 
 ## 仓库结构
 
@@ -44,6 +45,7 @@ tests/fixtures/         测试输入资产
 examples/ocr/           用户可运行的 OCR 示例资产
 scripts/                开发、安装、smoke 脚本
 docs/                   架构和维护文档
+release/                GitHub 仓库配置和生成的 Release Notes
 output/                 本地运行输出，不提交
 ```
 
@@ -143,6 +145,8 @@ Tauri 前端
 
 系统设置采用分类结构：`通用`、`OCR`、`翻译`、`截图`、`剪贴板`、`缓存管理`、`快捷键`、`后端与扩展`、`关于`。`通用` 只保留界面主题等应用基础偏好；OCR 识别相关的存储目录、输出格式、引擎、语言、PDF 行为和重新识别前是否清空旧结果列表及旧输出文件统一放在 `OCR` 分类，其中语言使用下拉选择，覆盖简体中文、繁体中文、英文、日文和韩文。OCR 默认存储目录为用户文稿目录下的 `墨识/OCR`；截图未配置保存目录时默认写入用户文稿目录下的 `墨识/Screenshots`。翻译分类保持左侧引擎卡片、右侧配置表单的左右布局，点击卡片只切换查看和编辑哪个引擎配置，点击卡片内「启用」按钮才切换当前唯一使用的翻译引擎；右侧维护当前查看引擎密钥信息：OpenAI 兼容引擎配置 Base URL、API Key 和模型，火山翻译只配置 Access Key 与 Secret Key；切换引擎后写入本地设置，翻译弹框直接使用该引擎；译文目标语言默认自动判断，也可以在翻译弹框中手动指定。截图分类维护截图保存目录、临时文件和结果窗行为，不再提供普通截图后自动 OCR 开关；截图 OCR 已作为独立入口，触发后默认直接识别。`缓存管理` 分类通过后端统计 OCR 结果、截图、剪贴板历史记录与复制图片缓存、模型缓存的占用空间，展示各项大小、文件数量和总量；剪贴板历史为空时不把空 SQLite 容器文件算作缓存，点击清理按钮后可勾选需要清空的缓存区域。原一级「后端」入口已合并到「后端与扩展」，用于检查内置后端、查看 App 数据目录、导入或卸载 OCR 扩展。设置页维护最新草稿，控件变更后以 500ms 防抖按顺序写入 App 数据目录下的 `settings.db`，失焦、目录选择和显式重置等关键动作会立即 flush；旧版本 `localStorage` 设置会在首次加载时自动迁移到 SQLite，迁移时会丢弃旧版 `screenshotAutoOcr` 字段。`快捷键` 分类下可逐一修改各功能的全局快捷键，当前绑定使用 shadcn 风格 `Kbd` 键帽展示，留空表示不注册，自动保存时会通过 `register_shortcuts` 命令让 Rust 重新注册全局快捷键并重建托盘菜单，菜单项右侧提示会同步更新。
 
+「关于」页面从 Tauri 包信息读取当前版本，并展示 `ui/src/data/changelog.json` 中按版本维护的完整更新日志。Rust 更新模块在每个应用进程启动后只请求一次 GitHub `releases/latest`，手动检查会复用同一状态缓存；发现更高 SemVer 后优先打开 Release 中的 DMG 资源，没有 DMG 时回退到 Release 详情页。启动检查失败不会打扰用户，手动检查失败才显示错误。详细协议和发布约定见 [docs/update-system.md](docs/update-system.md)。
+
 设置页在窗口高度不足时会把左侧分类和右侧表单限制在面板内滚动；左侧分类滚动条与菜单卡片之间保留内边距；带恢复行为的分类会将「恢复默认」固定在设置面板底部，避免底部操作被窗口裁切。
 
 系统设置的「通用」里可以切换界面主题：浅色、深色或跟随系统。主题偏好写入本地设置；选择跟随系统时，前端监听 `prefers-color-scheme` 并在系统外观变化后自动应用对应主题。
@@ -164,6 +168,28 @@ pnpm run tauri
 ```bash
 pnpm run tauri:build
 ```
+
+## 发布新版本
+
+首次发布前，在 `release/config.json` 中填写公开 GitHub 仓库：
+
+```json
+{
+  "githubRepository": "owner/repo"
+}
+```
+
+发布时先在 `ui/src/data/changelog.json` 顶部增加新版本，再同步版本号并生成 Release Notes：
+
+```bash
+pnpm release:prepare -- 0.2.0
+zsh scripts/verify_desktop_release.sh
+gh release create v0.2.0 src-tauri/target/release/bundle/dmg/墨识_0.2.0_*.dmg \
+  --title "墨识 v0.2.0" \
+  --notes-file "release/release-notes.md"
+```
+
+`release:prepare` 会同步 `package.json`、`src-tauri/tauri.conf.json` 和 `src-tauri/Cargo.toml`；发布校验会检查三处版本和更新日志首项一致。GitHub 仓库也可在构建时通过 `MOSHI_GITHUB_REPOSITORY=owner/repo` 覆盖，但正式发布仍建议提交配置文件。
 
 ## 验证
 

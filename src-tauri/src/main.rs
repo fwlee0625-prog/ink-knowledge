@@ -18,6 +18,7 @@ mod storage;
 mod translation;
 mod translation_window;
 mod tray;
+mod update;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,9 +26,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             app.set_dock_visibility(false);
+            app.manage(update::UpdateState::new(
+                app.package_info().version.to_string(),
+            ));
+            update::start_startup_check(app.handle().clone());
             tray::init(app.handle())?;
             // 启动时按默认快捷键注册一次，保证前端加载前托盘菜单已有快捷键提示。
             // 前端加载后会用 SQLite 中保存的偏好覆盖默认绑定。
@@ -61,6 +67,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::check_backend,
+            commands::check_app_update,
             commands::capture_region,
             commands::clear_app_settings,
             commands::clear_clipboard_history,
@@ -70,6 +77,7 @@ pub fn run() {
             commands::delete_clipboard_item,
             commands::install_extension_from_dir,
             commands::get_default_settings,
+            commands::get_app_update_status,
             commands::get_file_info,
             commands::get_default_shortcut_bindings,
             commands::get_pending_ocr_result,

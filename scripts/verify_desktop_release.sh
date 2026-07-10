@@ -10,6 +10,9 @@ SELF_TEST_DIR="${TMPDIR:-/tmp}/moshi-release-self-test"
 
 cd "$ROOT_DIR"
 
+echo "== Release metadata =="
+pnpm run release:check
+
 echo "== Rust check =="
 cargo check --manifest-path src-tauri/Cargo.toml
 

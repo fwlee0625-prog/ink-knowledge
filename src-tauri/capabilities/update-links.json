@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings-update-links",
+  "description": "Allow the settings window to open trusted GitHub Release and asset URLs.",
+  "windows": ["settings"],
+  "permissions": [
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/*" },
+        { "url": "https://objects.githubusercontent.com/*" },
+        { "url": "https://release-assets.githubusercontent.com/*" }
+      ]
+    }
+  ]
+}

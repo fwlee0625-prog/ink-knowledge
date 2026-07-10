@@ -16,6 +16,7 @@ pub use crate::shortcuts::ShortcutBindings;
 pub use crate::storage::{
     ClearStorageCacheRequest, ClearStorageCacheResponse, StorageUsageRequest, StorageUsageResponse,
 };
+pub use crate::update::AppUpdateStatus;
 pub use crate::{
     clipboard::{ClipboardTextResponse, ClipboardWriteRequest},
     clipboard_window::ClipboardWindowResponse,
@@ -116,6 +117,18 @@ pub struct OcrResponse {
 #[tauri::command]
 pub async fn check_backend(app: tauri::AppHandle) -> Result<BackendStatus, String> {
     run_blocking(move || crate::backend::check_backend(app)).await
+}
+
+#[tauri::command]
+pub fn get_app_update_status(
+    state: tauri::State<'_, crate::update::UpdateState>,
+) -> AppUpdateStatus {
+    state.status()
+}
+
+#[tauri::command]
+pub async fn check_app_update(app: tauri::AppHandle) -> AppUpdateStatus {
+    crate::update::check_and_store(app).await
 }
 
 #[tauri::command]

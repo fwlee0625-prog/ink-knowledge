@@ -52,6 +52,7 @@ import {
 import { clampNumber, formatBytes } from "../../../lib/format";
 import { ocrLanguageOptions } from "../../../lib/ocrLanguages";
 import { cn } from "../../../lib/utils";
+import { useAppUpdate } from "../../../lib/update";
 import type {
   AppSettings,
   BackendStatus,
@@ -66,6 +67,7 @@ import type {
 } from "../../../types";
 import type { ResolvedTheme } from "../../../lib/theme";
 import { SettingItem } from "./SettingItem";
+import { AppUpdatePanel } from "./AppUpdatePanel";
 
 type SettingsPageProps = {
   busy: boolean;
@@ -149,6 +151,7 @@ export function SettingsPage({
   const [storageMessage, setStorageMessage] = useState("");
   const [cacheSelectionMode, setCacheSelectionMode] = useState(false);
   const [selectedCacheIds, setSelectedCacheIds] = useState<string[]>([]);
+  const { checkForUpdates, manualError: updateManualError, status: updateStatus } = useAppUpdate();
   const draftSettingsRef = useRef(settings);
   const activeMeta = sections.find((section) => section.id === activeSection) ?? sections[0];
 
@@ -281,10 +284,17 @@ export function SettingsPage({
           <Separator className="my-3" />
           <div className="space-y-2 px-1">
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-muted-foreground">
-              <span>版本 0.1.0</span>
-              <Button className="h-8 px-2" variant="ghost">
-                <RefreshCw />
-                更新
+              <span className="truncate" title={`版本 ${updateStatus.currentVersion || "-"}`}>
+                版本 {updateStatus.currentVersion || "-"}
+              </span>
+              <Button
+                className="h-8 px-2"
+                disabled={updateStatus.state === "checking"}
+                onClick={() => void checkForUpdates()}
+                variant={updateStatus.state === "update_available" ? "outline" : "ghost"}
+              >
+                <RefreshCw className={updateStatus.state === "checking" ? "animate-spin" : undefined} />
+                {updateStatus.state === "update_available" ? `v${updateStatus.latestVersion}` : "检查"}
               </Button>
             </div>
             <div className="flex items-center justify-between rounded-lg px-2 py-2 text-sm">
@@ -906,10 +916,15 @@ export function SettingsPage({
             {activeSection === "about" && (
               <SettingsSection>
                 <div className="grid gap-4 md:grid-cols-3">
-                  <MetaCard label="版本" value="0.1.0" />
+                  <MetaCard label="版本" value={updateStatus.currentVersion || "-"} />
                   <MetaCard label="权限说明" value="截图需要 macOS 屏幕录制权限；剪贴板功能会读写系统剪贴板。" />
                   <MetaCard label="翻译说明" value="启用翻译后，文本会发送到你配置的 API 服务。" />
                 </div>
+                <AppUpdatePanel
+                  manualError={updateManualError}
+                  onCheckForUpdates={checkForUpdates}
+                  status={updateStatus}
+                />
               </SettingsSection>
             )}
           </div>

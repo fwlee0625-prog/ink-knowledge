@@ -78,6 +78,28 @@ export type ClearStorageCacheResponse = {
   removed_files: number;
 };
 
+export type AppUpdateState = "idle" | "checking" | "up_to_date" | "update_available" | "error";
+
+export type AppUpdateStatus = {
+  state: AppUpdateState;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseName?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  downloadUrl?: string;
+  releasePageUrl?: string;
+  checkedAt?: string;
+  error?: string;
+};
+
+export type ChangelogEntry = {
+  version: string;
+  date: string;
+  title: string;
+  changes: string[];
+};
+
 export type OcrEngine = "paddle" | "apple-vision";
 
 export type ThemePreference = "system" | "light" | "dark";
