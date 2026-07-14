@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OcrPage } from "./components/features/ocr/OcrPage";
-import { isSupportedOcrFilePath, ocrFileExtensions, ocrImageExtensions } from "./components/features/ocr/ocrFileSupport";
+import { isSupportedOcrFilePath, ocrFileExtensions } from "./components/features/ocr/ocrFileSupport";
 import { SettingsPage } from "./components/features/settings/SettingsPage";
 import { useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
@@ -34,8 +34,6 @@ import type {
 } from "./types";
 
 const settingsSaveDebounceMs = 500;
-type FilePickerKind = "image" | "pdf" | "all";
-
 type PendingSettingsSave = {
   message: string;
   serialized: string;
@@ -275,11 +273,11 @@ export function App({ initialView = "ocr" }: AppProps) {
     return addedPaths.length;
   };
 
-  const chooseFile = async (kind: FilePickerKind = "all") => {
+  const chooseFile = async () => {
     try {
       const selected = await open({
         multiple: true,
-        filters: filePickerFilters(kind),
+        filters: filePickerFilters(),
       });
 
       const paths = Array.isArray(selected) ? selected : typeof selected === "string" ? [selected] : [];
@@ -618,8 +616,7 @@ export function App({ initialView = "ocr" }: AppProps) {
         <OcrPage
           busy={busy}
           onAddDroppedFiles={addDroppedFiles}
-          onChooseImage={() => chooseFile("image")}
-          onChoosePdf={() => chooseFile("pdf")}
+          onChooseFiles={chooseFile}
           onChooseFolder={chooseFolder}
           onClearFiles={() => setSelectedFiles([])}
           onRemoveFile={(path) => setSelectedFiles((current) => current.filter((item) => item !== path))}
@@ -658,13 +655,7 @@ export function App({ initialView = "ocr" }: AppProps) {
   );
 }
 
-function filePickerFilters(kind: FilePickerKind) {
-  if (kind === "image") {
-    return [{ name: "Images", extensions: ocrImageExtensions }];
-  }
-  if (kind === "pdf") {
-    return [{ name: "PDF", extensions: ["pdf"] }];
-  }
+function filePickerFilters() {
   return [
     {
       name: "OCR Files",

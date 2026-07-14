@@ -15,8 +15,7 @@ type OcrPageProps = {
   settings: AppSettings;
   onAddDroppedFiles: (paths: string[]) => void | Promise<void>;
   onClearFiles: () => void;
-  onChooseImage: () => Promise<void>;
-  onChoosePdf: () => Promise<void>;
+  onChooseFiles: () => Promise<void>;
   onChooseFolder: () => Promise<void>;
   onRemoveFile: (path: string) => void;
   onRunOcr: () => Promise<void>;
@@ -37,8 +36,7 @@ export function OcrPage({
   selectedFiles,
   settings,
   onAddDroppedFiles,
-  onChooseImage,
-  onChoosePdf,
+  onChooseFiles,
   onChooseFolder,
   onClearFiles,
   onRemoveFile,
@@ -132,8 +130,7 @@ export function OcrPage({
           <OcrFileInputPanel
             busy={busy}
             onChooseFolder={onChooseFolder}
-            onChooseImage={onChooseImage}
-            onChoosePdf={onChoosePdf}
+            onChooseFiles={onChooseFiles}
             onDropPaths={onAddDroppedFiles}
           />
 

@@ -1,20 +1,18 @@
-import { FileText, Folder, Image, Plus, Upload } from "lucide-react";
+import { FilePlus, FolderPlus, Upload } from "lucide-react";
 import { AppButton } from "../../ui";
 import { useOcrFileDrop } from "./useOcrFileDrop";
 
 type OcrFileInputPanelProps = {
   busy: boolean;
   onChooseFolder: () => Promise<void>;
-  onChooseImage: () => Promise<void>;
-  onChoosePdf: () => Promise<void>;
+  onChooseFiles: () => Promise<void>;
   onDropPaths: (paths: string[]) => void | Promise<void>;
 };
 
 export function OcrFileInputPanel({
   busy,
   onChooseFolder,
-  onChooseImage,
-  onChoosePdf,
+  onChooseFiles,
   onDropPaths,
 }: OcrFileInputPanelProps) {
   const { dropActive, dropZoneProps } = useOcrFileDrop({
@@ -26,19 +24,12 @@ export function OcrFileInputPanel({
     <section className="ocr-add-section">
       <h2>添加文件</h2>
       <div className="ocr-add-actions">
-        <AppButton className="ocr-add-button" disabled={busy} onClick={onChooseImage} variant="ghost">
-          <Plus />
-          <Image />
-          <span>图片</span>
-        </AppButton>
-        <AppButton className="ocr-add-button" disabled={busy} onClick={onChoosePdf} variant="ghost">
-          <Plus />
-          <FileText />
-          <span>PDF</span>
+        <AppButton className="ocr-add-button" disabled={busy} onClick={onChooseFiles} variant="ghost">
+          <FilePlus />
+          <span>选择文件</span>
         </AppButton>
         <AppButton className="ocr-add-button" disabled={busy} onClick={onChooseFolder} variant="ghost">
-          <Plus />
-          <Folder />
+          <FolderPlus />
           <span>文件夹</span>
         </AppButton>
       </div>
@@ -46,7 +37,7 @@ export function OcrFileInputPanel({
       <button
         className={dropActive ? "ocr-drop-zone active" : "ocr-drop-zone"}
         disabled={busy}
-        onClick={onChooseImage}
+        onClick={onChooseFiles}
         type="button"
         {...dropZoneProps}
       >

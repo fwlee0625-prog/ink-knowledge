@@ -125,6 +125,8 @@ mac-local-ocr examples/ocr/sample_text.pdf -o output --force-ocr --dpi 300
 
 ## 桌面应用
 
+OCR 左侧输入面板提供「选择文件」和「文件夹」两个入口。「选择文件」的系统选择器可一次选择图片和 PDF；拖拽区同样支持这些格式。
+
 本项目已引入 Tauri 前端骨架，目标只支持 macOS。桌面版采用原生基础后端加可选扩展的思路：
 
 ```text

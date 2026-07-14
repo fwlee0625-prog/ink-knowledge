@@ -4,6 +4,8 @@
 
 ## Runtime Boundaries
 
+OCR 文件输入由 `OcrFileInputPanel` 承载，提供一个同时过滤图片与 PDF 的文件选择入口，以及独立的文件夹扫描入口；文件拖拽仍由 `useOcrFileDrop` 负责。
+
 ```text
 Python package
   src/mac_local_ocr/
