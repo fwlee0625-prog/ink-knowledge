@@ -9,7 +9,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
 const CLIPBOARD_WINDOW_CLOSE_SHORTCUT: &str = "Escape";
 const CLIPBOARD_WINDOW_WIDTH: f64 = 1280.0;
-const CLIPBOARD_WINDOW_HEIGHT: f64 = 380.0;
+const CLIPBOARD_WINDOW_HEIGHT: f64 = 440.0;
 
 static CLOSE_SHORTCUT_REGISTERED: AtomicBool = AtomicBool::new(false);
 
@@ -36,12 +36,13 @@ pub fn open_clipboard_window(app: &tauri::AppHandle) -> Result<ClipboardWindowRe
         )
         .title("剪贴板")
         .inner_size(CLIPBOARD_WINDOW_WIDTH, CLIPBOARD_WINDOW_HEIGHT)
-        .min_inner_size(960.0, 320.0)
+        .min_inner_size(640.0, 360.0)
         .resizable(true)
         .center()
-        .focused(true)
+        .focused(false)
         .always_on_top(true)
         .visible_on_all_workspaces(true)
+        .visible(false)
         .transparent(true)
         .background_color(Color(0, 0, 0, 0))
         .decorations(false)
@@ -68,8 +69,6 @@ pub fn open_clipboard_window(app: &tauri::AppHandle) -> Result<ClipboardWindowRe
             ),
         });
 
-        let _ = window.show();
-        let _ = window.set_focus();
         register_close_shortcut(app);
     }
 
@@ -137,9 +136,7 @@ fn position_clipboard_window(window: &WebviewWindow) {
     let work_height = work_area.size.height as i32;
 
     let x = work_x + ((work_width - width) / 2).max(margin);
-    let preferred_y = work_y + ((work_height as f64 - height as f64) * 0.62).round() as i32;
-    let max_y = work_y + work_height - height - margin;
-    let y = preferred_y.clamp(work_y + margin, max_y.max(work_y + margin));
+    let y = (work_y + work_height - height).max(work_y + margin);
 
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }

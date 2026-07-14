@@ -171,7 +171,7 @@ fn poll_once(app: &AppHandle) -> Result<(), String> {
         file_count: snapshot.file_count,
         source: "clipboard".to_string(),
         created_at: unix_millis().to_string(),
-        pinned: false,
+        favorite: false,
         expired: false,
     };
 

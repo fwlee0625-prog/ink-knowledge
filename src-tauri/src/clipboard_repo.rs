@@ -27,7 +27,8 @@ pub struct ClipboardHistoryItem {
     pub file_count: Option<i64>,
     pub source: String,
     pub created_at: String,
-    pub pinned: bool,
+    /// 数据库仍使用 pinned 列兼容既有历史，接口语义为收藏。
+    pub favorite: bool,
     pub expired: bool,
 }
 
@@ -46,12 +47,12 @@ impl Default for ClipboardRepoConfig {
 mod tests {
     use super::*;
 
-    fn insert_test_item(conn: &Connection, id: &str, created_at: &str, pinned: bool) {
+    fn insert_test_item(conn: &Connection, id: &str, created_at: &str, favorite: bool) {
         conn.execute(
             "INSERT INTO clipboard_items
                 (id, kind, source, created_at, pinned, expired)
              VALUES (?1, 'text', 'clipboard', ?2, ?3, 0)",
-            params![id, created_at, if pinned { 1 } else { 0 }],
+            params![id, created_at, if favorite { 1 } else { 0 }],
         )
         .unwrap();
     }
@@ -67,10 +68,10 @@ mod tests {
     }
 
     #[test]
-    fn prune_keeps_pinned_and_latest_unpinned_items() {
+    fn prune_keeps_favorites_and_latest_regular_items_without_reordering() {
         let conn = Connection::open_in_memory().unwrap();
         ClipboardRepo::run_migrations(&conn).unwrap();
-        insert_test_item(&conn, "pinned-old", "2026-01-01T00:00:00Z", true);
+        insert_test_item(&conn, "favorite-old", "2026-01-01T00:00:00Z", true);
         insert_test_item(&conn, "old", "2026-01-02T00:00:00Z", false);
         insert_test_item(&conn, "newer", "2026-01-03T00:00:00Z", false);
         insert_test_item(&conn, "newest", "2026-01-04T00:00:00Z", false);
@@ -78,14 +79,33 @@ mod tests {
         ClipboardRepo::prune_with_conn(&conn, 2).unwrap();
 
         let mut stmt = conn
-            .prepare("SELECT id FROM clipboard_items ORDER BY pinned DESC, created_at DESC")
+            .prepare("SELECT id FROM clipboard_items ORDER BY created_at DESC")
             .unwrap();
         let ids = stmt
             .query_map([], |row| row.get::<_, String>(0))
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        assert_eq!(ids, vec!["pinned-old", "newest", "newer"]);
+        assert_eq!(ids, vec!["newest", "newer", "favorite-old"]);
+    }
+
+    #[test]
+    fn clear_keeps_favorites() {
+        let conn = Connection::open_in_memory().unwrap();
+        ClipboardRepo::run_migrations(&conn).unwrap();
+        insert_test_item(&conn, "favorite", "2026-01-01T00:00:00Z", true);
+        insert_test_item(&conn, "regular", "2026-01-02T00:00:00Z", false);
+
+        ClipboardRepo::clear_non_favorites_with_conn(&conn).unwrap();
+
+        let ids = conn
+            .prepare("SELECT id FROM clipboard_items ORDER BY created_at DESC")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(ids, vec!["favorite"]);
     }
 
     #[test]
@@ -170,14 +190,23 @@ impl ClipboardRepo {
         Ok(())
     }
 
-    /// 插入一条记录。会自动按 max_items 裁剪未置顶的旧记录。
+    /// 插入一条记录。会自动按 max_items 裁剪未收藏的旧记录。
     /// text 类型按 text 去重；files 类型按 paths_json 去重；image 不去重（每次复制都视为新项）。
-    pub fn insert(&self, item: ClipboardHistoryItem) -> Result<(), String> {
+    pub fn insert(&self, mut item: ClipboardHistoryItem) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
 
         // text 类型按 text 字段去重
         if item.kind == "text" {
             if let Some(text) = &item.text {
+                let existing_favorite: Option<i64> = conn
+                    .query_row(
+                        "SELECT pinned FROM clipboard_items WHERE kind = 'text' AND text = ?1",
+                        params![text],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| format!("查询文本收藏状态失败: {e}"))?;
+                item.favorite |= existing_favorite.unwrap_or(0) != 0;
                 conn.execute(
                     "DELETE FROM clipboard_items WHERE kind = 'text' AND text = ?1",
                     params![text],
@@ -189,6 +218,15 @@ impl ClipboardRepo {
         if item.kind == "files" {
             if let Some(paths) = &item.paths {
                 let json = serde_json::to_string(paths).unwrap_or_default();
+                let existing_favorite: Option<i64> = conn
+                    .query_row(
+                        "SELECT pinned FROM clipboard_items WHERE kind = 'files' AND paths_json = ?1",
+                        params![json],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| format!("查询文件收藏状态失败: {e}"))?;
+                item.favorite |= existing_favorite.unwrap_or(0) != 0;
                 conn.execute(
                     "DELETE FROM clipboard_items WHERE kind = 'files' AND paths_json = ?1",
                     params![json],
@@ -202,7 +240,7 @@ impl ClipboardRepo {
             .as_ref()
             .map(|p| serde_json::to_string(p).unwrap_or_default());
         let is_dir_int = item.is_dir.map(|b| if b { 1 } else { 0 });
-        let pinned_int = if item.pinned { 1 } else { 0 };
+        let pinned_int = if item.favorite { 1 } else { 0 };
         let expired_int = if item.expired { 1 } else { 0 };
 
         conn.execute(
@@ -228,7 +266,7 @@ impl ClipboardRepo {
         )
         .map_err(|e| format!("插入剪贴板记录失败: {e}"))?;
 
-        // 裁剪：保留所有 pinned 项 + 未 pinned 中最新的 max_items 条
+        // 裁剪：保留所有收藏项 + 未收藏中最新的 max_items 条
         let max_items = self.config.lock().map(|c| c.max_items).unwrap_or(100);
         let image_paths = Self::prune_with_conn(&conn, max_items)?;
         Self::remove_image_files(image_paths);
@@ -328,23 +366,6 @@ impl ClipboardRepo {
         Ok(())
     }
 
-    fn remove_all_images_in_dir(image_dir: &Path) -> Result<(), String> {
-        if !image_dir.exists() {
-            return Ok(());
-        }
-        let entries = std::fs::read_dir(image_dir)
-            .map_err(|e| format!("读取剪贴板图片缓存失败 {}: {e}", image_dir.display()))?;
-        for entry in entries {
-            let path = entry
-                .map_err(|e| format!("读取剪贴板图片缓存条目失败: {e}"))?
-                .path();
-            if path.is_file() {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-        Ok(())
-    }
-
     pub fn list(&self, limit: usize) -> Result<Vec<ClipboardHistoryItem>, String> {
         let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
         let mut stmt = conn
@@ -352,7 +373,7 @@ impl ClipboardRepo {
                 "SELECT id, kind, text, image_path, paths_json, size_bytes, mime_type,
                         is_dir, file_count, source, created_at, pinned, expired
                  FROM clipboard_items
-                 ORDER BY pinned DESC, created_at DESC
+                 ORDER BY created_at DESC
                  LIMIT ?1",
             )
             .map_err(|e| format!("准备查询失败: {e}"))?;
@@ -385,7 +406,7 @@ impl ClipboardRepo {
                     file_count,
                     source: row.get(9)?,
                     created_at: row.get(10)?,
-                    pinned: pinned_int != 0,
+                    favorite: pinned_int != 0,
                     expired: expired_int != 0,
                 })
             })
@@ -432,7 +453,7 @@ impl ClipboardRepo {
                     file_count,
                     source: row.get(9)?,
                     created_at: row.get(10)?,
-                    pinned: pinned_int != 0,
+                    favorite: pinned_int != 0,
                     expired: expired_int != 0,
                 })
             },
@@ -470,11 +491,22 @@ impl ClipboardRepo {
         Ok(())
     }
 
-    pub fn clear_all(&self) -> Result<(), String> {
+    pub fn clear_non_favorites(&self) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
-        // 取出所有图片路径用于清理文件
+        let image_paths = Self::clear_non_favorites_with_conn(&conn)?;
+        conn.execute_batch(
+            "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);",
+        )
+        .map_err(|e| format!("压缩剪贴板数据库失败: {e}"))?;
+        Self::remove_image_files(image_paths);
+        Self::cleanup_unreferenced_images_with_conn(&conn, &self.image_dir)?;
+        Ok(())
+    }
+
+    fn clear_non_favorites_with_conn(conn: &Connection) -> Result<Vec<String>, String> {
+        // 取出未收藏图片路径，清空时保留收藏记录及其缓存。
         let mut stmt = conn
-            .prepare("SELECT image_path FROM clipboard_items WHERE image_path IS NOT NULL")
+            .prepare("SELECT image_path FROM clipboard_items WHERE pinned = 0 AND image_path IS NOT NULL")
             .map_err(|e| format!("准备查询失败: {e}"))?;
         let image_paths: Vec<String> = stmt
             .query_map([], |row| row.get(0))
@@ -482,25 +514,19 @@ impl ClipboardRepo {
             .filter_map(|r| r.ok())
             .collect();
         drop(stmt);
-        conn.execute("DELETE FROM clipboard_items", [])
+        conn.execute("DELETE FROM clipboard_items WHERE pinned = 0", [])
             .map_err(|e| format!("清空记录失败: {e}"))?;
-        conn.execute_batch(
-            "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);",
-        )
-        .map_err(|e| format!("压缩剪贴板数据库失败: {e}"))?;
-        Self::remove_image_files(image_paths);
-        Self::remove_all_images_in_dir(&self.image_dir)?;
-        Ok(())
+        Ok(image_paths)
     }
 
-    pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
+    pub fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("锁 DB 失败: {e}"))?;
-        let pinned_int = if pinned { 1 } else { 0 };
+        let pinned_int = if favorite { 1 } else { 0 };
         conn.execute(
             "UPDATE clipboard_items SET pinned = ?1 WHERE id = ?2",
             params![pinned_int, id],
         )
-        .map_err(|e| format!("更新置顶失败: {e}"))?;
+        .map_err(|e| format!("更新收藏失败: {e}"))?;
         Ok(())
     }
 

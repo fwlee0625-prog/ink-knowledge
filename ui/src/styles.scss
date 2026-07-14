@@ -69,6 +69,14 @@ body,
   --scrollbar-thumb: hsl(var(--foreground) / 0.18);
   --scrollbar-thumb-hover: hsl(var(--foreground) / 0.28);
   --scrollbar-thumb-active: hsl(var(--foreground) / 0.38);
+  --clipboard-text: 204 45% 32%;
+  --clipboard-text-soft: 204 68% 90%;
+  --clipboard-image: 151 45% 28%;
+  --clipboard-image-soft: 151 52% 88%;
+  --clipboard-files: 32 58% 30%;
+  --clipboard-files-soft: 38 78% 87%;
+  --clipboard-unknown: 220 8% 38%;
+  --clipboard-unknown-soft: 220 16% 89%;
   color: $text;
   background: $page;
   color-scheme: light;
@@ -113,6 +121,14 @@ body,
   --scrollbar-thumb: hsl(var(--foreground) / 0.22);
   --scrollbar-thumb-hover: hsl(var(--foreground) / 0.34);
   --scrollbar-thumb-active: hsl(var(--foreground) / 0.46);
+  --clipboard-text: 204 55% 24%;
+  --clipboard-text-soft: 204 62% 82%;
+  --clipboard-image: 151 50% 21%;
+  --clipboard-image-soft: 151 48% 79%;
+  --clipboard-files: 32 62% 22%;
+  --clipboard-files-soft: 38 72% 79%;
+  --clipboard-unknown: 220 9% 25%;
+  --clipboard-unknown-soft: 220 12% 80%;
   color-scheme: dark;
 }
 
@@ -163,6 +179,9 @@ body {
 :root[data-window="clipboard"],
 :root[data-window="clipboard"] body,
 :root[data-window="clipboard"] #app {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   background: transparent;
 }
 
@@ -2584,20 +2603,6 @@ pre.preview-content {
   }
 }
 
-.clipboard-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: $primary-soft;
-  color: $primary;
-  font-size: 13px;
-  font-weight: 900;
-}
-
 .clipboard-shelf {
   display: grid;
   grid-auto-columns: clamp(210px, 24vw, 272px);
@@ -2609,6 +2614,14 @@ pre.preview-content {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: contain;
+}
+
+.clipboard-card-size-small .clipboard-shelf {
+  grid-auto-columns: clamp(168px, 18vw, 204px);
+}
+
+.clipboard-card-size-large .clipboard-shelf {
+  grid-auto-columns: clamp(300px, 32vw, 380px);
 }
 
 .clipboard-shelf-card {
@@ -2647,8 +2660,8 @@ pre.preview-content {
   min-height: 38px;
   padding: 8px 10px;
   border: 0;
-  background: $primary;
-  color: $primary-text;
+  background: hsl(var(--clipboard-text-soft));
+  color: hsl(var(--clipboard-text));
   font: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -2656,15 +2669,18 @@ pre.preview-content {
 }
 
 .clipboard-shelf-card.kind-image .clipboard-shelf-strip {
-  background: $primary;
+  background: hsl(var(--clipboard-image-soft));
+  color: hsl(var(--clipboard-image));
 }
 
 .clipboard-shelf-card.kind-files .clipboard-shelf-strip {
-  background: $primary;
+  background: hsl(var(--clipboard-files-soft));
+  color: hsl(var(--clipboard-files));
 }
 
 .clipboard-shelf-card.kind-unknown .clipboard-shelf-strip {
-  background: $primary;
+  background: hsl(var(--clipboard-unknown-soft));
+  color: hsl(var(--clipboard-unknown));
 }
 
 .clipboard-shelf-body {
@@ -2692,7 +2708,7 @@ pre.preview-content {
 }
 
 .clipboard-card-text {
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 2;
 }
 
 .clipboard-preview-text {
@@ -2725,6 +2741,7 @@ pre.preview-content {
 }
 
 .clipboard-preview-image {
+  display: block;
   width: 132px;
   height: 78px;
 }
@@ -2751,34 +2768,59 @@ pre.preview-content {
 .clipboard-shelf-footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-height: 34px;
   padding: 4px 10px;
   border-top: 1px solid $border-soft;
 
   > span {
+    min-width: 0;
     min-height: 16px;
+    overflow: hidden;
     color: $muted-2;
     font-size: 12px;
     font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .clipboard-record-actions {
+    flex: 0 0 auto;
   }
 }
 
-.clipboard-shelf-actions,
 .clipboard-vertical-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
   min-width: 0;
+}
 
-  .text-button {
-    min-height: 24px;
-    padding: 0 6px;
-    font-size: 12px;
+.clipboard-record-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.clipboard-record-action {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: $muted;
+
+  &.is-favorite {
+    color: hsl(var(--clipboard-files));
+  }
+
+  &.is-delete:hover {
+    color: $danger;
   }
 }
 
 .clipboard-vertical-list {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 10px;
   margin: 0;
   padding: 16px;
@@ -2788,12 +2830,13 @@ pre.preview-content {
 
 .clipboard-vertical-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  min-height: 96px;
-  padding: 12px;
+  min-height: 112px;
+  padding: 12px 14px 12px 16px;
   border: 1px solid $border-soft;
+  border-left: 2px solid hsl(var(--clipboard-unknown) / 0.52);
   border-radius: 8px;
   background: $surface-muted;
   cursor: pointer;
@@ -2807,6 +2850,18 @@ pre.preview-content {
     cursor: not-allowed;
     opacity: 0.56;
   }
+}
+
+.clipboard-vertical-row.kind-text {
+  border-left-color: hsl(var(--clipboard-text) / 0.52);
+}
+
+.clipboard-vertical-row.kind-image {
+  border-left-color: hsl(var(--clipboard-image) / 0.52);
+}
+
+.clipboard-vertical-row.kind-files {
+  border-left-color: hsl(var(--clipboard-files) / 0.52);
 }
 
 .clipboard-vertical-main {
@@ -2840,11 +2895,21 @@ pre.preview-content {
 
 .clipboard-vertical-body {
   min-width: 0;
+  overflow: hidden;
 }
 
 .clipboard-window-shell {
-  width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ocr-result-window.clipboard-window {
+  width: 100vw;
+  height: 100vh;
+  padding: 1px;
 }
 
 .clipboard-window-title {
@@ -2877,9 +2942,7 @@ pre.preview-content {
 }
 
 .clipboard-window-search {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  position: relative;
   margin-bottom: 4px;
 
   input {
@@ -2890,7 +2953,7 @@ pre.preview-content {
     background: $surface-muted;
     color: $text;
     font: inherit;
-    padding: 0 12px;
+    padding: 0 40px 0 12px;
     outline: none;
 
     &:focus {
@@ -2898,6 +2961,17 @@ pre.preview-content {
       background: $surface;
     }
   }
+}
+
+.clipboard-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: $muted;
+  transform: translateY(-50%);
 }
 
 .clipboard-window-content {
@@ -2918,6 +2992,8 @@ pre.preview-content {
 }
 
 .clipboard-window .clipboard-vertical-list {
+  height: 100%;
+  min-height: 0;
   padding: 12px 0 0;
 }
 

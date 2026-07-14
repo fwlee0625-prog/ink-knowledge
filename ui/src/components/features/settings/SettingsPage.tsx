@@ -58,6 +58,9 @@ import type {
   BackendStatus,
   ClearStorageCacheResponse,
   ClipboardLayout,
+  ClipboardCardSize,
+  ClipboardVerticalHeight,
+  ClipboardWindowWidth,
   ExtensionInfo,
   OcrEngine,
   SettingsCategory,
@@ -68,6 +71,8 @@ import type {
 import type { ResolvedTheme } from "../../../lib/theme";
 import { SettingItem } from "./SettingItem";
 import { AppUpdatePanel } from "./AppUpdatePanel";
+import { SizeOptionCards } from "./SizeOptionCards";
+import type { SizeOption } from "./SizeOptionCards";
 
 type SettingsPageProps = {
   busy: boolean;
@@ -108,6 +113,24 @@ const translationEngineOptions: Array<Option<TranslationEngine>> = [
 const clipboardLayoutOptions: Array<Option<ClipboardLayout>> = [
   { icon: LayoutPanelTop, label: "横向", value: "horizontal" },
   { icon: Clipboard, label: "纵向", value: "vertical" },
+];
+
+const clipboardWindowWidthOptions: Array<SizeOption<ClipboardWindowWidth>> = [
+  { detail: "50% × 440px", label: "小", value: "half" },
+  { detail: "1280 × 440px", label: "默认", value: "default" },
+  { detail: "100% × 440px", label: "大", value: "full" },
+];
+
+const clipboardCardSizeOptions: Array<SizeOption<ClipboardCardSize>> = [
+  { detail: "168-204px", label: "小", value: "small" },
+  { detail: "210-272px", label: "默认", value: "default" },
+  { detail: "300-380px", label: "大", value: "large" },
+];
+
+const clipboardVerticalHeightOptions: Array<SizeOption<ClipboardVerticalHeight>> = [
+  { detail: "620 × 560px", label: "小", value: "small" },
+  { detail: "620 × 720px", label: "默认", value: "default" },
+  { detail: "620 × 880px", label: "大", value: "large" },
 ];
 
 const sections: Array<{
@@ -627,8 +650,41 @@ export function SettingsPage({
                       onChange={(clipboardLayout) => updateSettings((current) => ({ ...current, clipboardLayout }))}
                     />
                   </SettingItem>
+                  {settings.clipboardLayout === "horizontal" && (
+                    <SettingItem description="选择横向窗口的显示宽度。" icon={Monitor} title="横向窗口宽度">
+                      <SizeOptionCards
+                        options={clipboardWindowWidthOptions}
+                        value={settings.clipboardWindowWidth}
+                        onChange={(clipboardWindowWidth) =>
+                          updateSettings((current) => ({ ...current, clipboardWindowWidth }))
+                        }
+                      />
+                    </SettingItem>
+                  )}
+                  {settings.clipboardLayout === "horizontal" && (
+                    <SettingItem description="调整横向列表中单张卡片的宽度。" icon={Gauge} title="横向卡片尺寸">
+                      <SizeOptionCards
+                        options={clipboardCardSizeOptions}
+                        value={settings.clipboardCardSize}
+                        onChange={(clipboardCardSize) =>
+                          updateSettings((current) => ({ ...current, clipboardCardSize }))
+                        }
+                      />
+                    </SettingItem>
+                  )}
+                  {settings.clipboardLayout === "vertical" && (
+                    <SettingItem description="超出屏幕时自动适配。" icon={Gauge} title="纵向窗口高度">
+                      <SizeOptionCards
+                        options={clipboardVerticalHeightOptions}
+                        value={settings.clipboardVerticalHeight}
+                        onChange={(clipboardVerticalHeight) =>
+                          updateSettings((current) => ({ ...current, clipboardVerticalHeight }))
+                        }
+                      />
+                    </SettingItem>
+                  )}
                   <NumberItem
-                    description="超过上限后保留最新记录，置顶项不受裁剪影响。"
+                    description="超过上限后保留最新记录，收藏项不受裁剪影响。"
                     icon={Database}
                     max={500}
                     min={10}

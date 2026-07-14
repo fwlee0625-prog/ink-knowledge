@@ -322,7 +322,7 @@ pub async fn write_clipboard_text(
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis().to_string())
                 .unwrap_or_else(|_| "0".to_string()),
-            pinned: false,
+            favorite: false,
             expired: false,
         };
         state.repo.insert(item)
@@ -396,17 +396,17 @@ pub async fn delete_clipboard_item(app: tauri::AppHandle, id: String) -> Result<
 #[tauri::command]
 pub async fn clear_clipboard_history(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<crate::native_pasteboard::PasteboardState>();
-    state.repo.clear_all()
+    state.repo.clear_non_favorites()
 }
 
 #[tauri::command]
-pub async fn set_clipboard_pinned(
+pub async fn set_clipboard_favorite(
     app: tauri::AppHandle,
     id: String,
-    pinned: bool,
+    favorite: bool,
 ) -> Result<(), String> {
     let state = app.state::<crate::native_pasteboard::PasteboardState>();
-    state.repo.set_pinned(&id, pinned)
+    state.repo.set_favorite(&id, favorite)
 }
 
 #[tauri::command]

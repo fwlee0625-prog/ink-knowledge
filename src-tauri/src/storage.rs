@@ -267,7 +267,7 @@ fn clear_cache_target(
             let Some(state) = app.try_state::<PasteboardState>() else {
                 return Ok(());
             };
-            state.repo.clear_all()
+            state.repo.clear_non_favorites()
         }
         "models" => remove_dir_contents(&app_data.join("models")),
         other => Err(format!("不支持清理的缓存类型: {other}")),

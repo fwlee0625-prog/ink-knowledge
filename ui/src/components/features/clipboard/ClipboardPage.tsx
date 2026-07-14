@@ -11,7 +11,7 @@ type ClipboardPageProps = {
   model: ReturnType<typeof useClipboardViewModel>;
 };
 
-const filters: ClipboardKindFilter[] = ["all", "text", "image", "files"];
+const filters: ClipboardKindFilter[] = ["all", "text", "image", "files", "favorites"];
 
 export function ClipboardPage({ layout, model }: ClipboardPageProps) {
   const content =
@@ -19,7 +19,7 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
       <ClipboardHorizontalView
         items={model.visibleItems}
         onDelete={model.deleteItem}
-        onTogglePinned={model.togglePinned}
+        onToggleFavorite={model.toggleFavorite}
         onUseItem={model.useItem}
         totalCount={model.history.length}
       />
@@ -27,7 +27,7 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
       <ClipboardVerticalView
         items={model.visibleItems}
         onDelete={model.deleteItem}
-        onTogglePinned={model.togglePinned}
+        onToggleFavorite={model.toggleFavorite}
         onUseItem={model.useItem}
         totalCount={model.history.length}
       />
@@ -47,9 +47,6 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
             placeholder="搜索文本或文件名"
             value={model.keyword}
           />
-          <AppButton disabled={model.busy} onClick={model.readCurrent}>
-            读取当前
-          </AppButton>
         </div>
         <ClipboardFilterTabs
           counts={model.counts}
@@ -61,8 +58,12 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
       <Card className="result tool-detail-panel clipboard-result-panel">
         <div className="clipboard-result-head">
           <span>{model.visibleItems.length} 条</span>
-          <AppButton disabled={model.history.length === 0} onClick={model.clearHistory} variant="text">
-            清空历史
+          <AppButton
+            disabled={model.history.length === model.counts.favorites}
+            onClick={model.clearHistory}
+            variant="text"
+          >
+            清空未收藏
           </AppButton>
         </div>
         {content}
@@ -72,7 +73,7 @@ export function ClipboardPage({ layout, model }: ClipboardPageProps) {
 }
 
 type ClipboardFilterTabsProps = {
-  counts: { text: number; image: number; files: number };
+  counts: { text: number; image: number; files: number; favorites: number };
   kindFilter: ClipboardKindFilter;
   onChange: (kind: ClipboardKindFilter) => void;
 };

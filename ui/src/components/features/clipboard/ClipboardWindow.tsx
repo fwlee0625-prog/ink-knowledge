@@ -1,49 +1,78 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { fallbackSettings, normalizeSavedSettings, readLegacySavedSettings } from "../../../lib/settings";
 import type { AppSettings } from "../../../types";
-import { AppButton, useMessage } from "../../ui";
+import { Button, Input, useMessage } from "../../ui";
 import { useFloatingWindowAutoClose } from "../floating-window/useFloatingWindowAutoClose";
 import { PinIcon } from "../ocr-result-window/OcrResultIcons";
 import { ClipboardFilterTabs } from "./ClipboardPage";
 import { ClipboardHorizontalView } from "./ClipboardHorizontalView";
 import { ClipboardVerticalView } from "./ClipboardVerticalView";
 import { useClipboardViewModel } from "./useClipboardViewModel";
+import { useClipboardWindowSizing } from "./useClipboardWindowSizing";
 
 export function ClipboardWindow() {
-  const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [pinned, setPinned] = useState(false);
+  const [windowReady, setWindowReady] = useState(false);
+  const revealedRef = useRef(false);
   const currentWindow = useMemo(() => getCurrentWindow(), []);
   const message = useMessage();
   const model = useClipboardViewModel({ onStatus: (text) => message.info(text) });
+  const revealWindow = useCallback(async () => {
+    if (revealedRef.current) return;
+    revealedRef.current = true;
+    try {
+      await currentWindow.show();
+      await currentWindow.setFocus();
+      setWindowReady(true);
+    } catch (error) {
+      revealedRef.current = false;
+      throw error;
+    }
+  }, [currentWindow]);
   const { closeWhenOutsideShell } = useFloatingWindowAutoClose({
-    autoCloseOnBlur: settings.ocrResultAutoCloseOnBlur,
+    autoCloseOnBlur: windowReady && Boolean(settings?.ocrResultAutoCloseOnBlur),
     currentWindow,
     label: "clipboard",
     pinned,
     shellSelector: ".clipboard-window-shell",
   });
+  useClipboardWindowSizing({
+    currentWindow,
+    layout: settings?.clipboardLayout ?? null,
+    onReady: revealWindow,
+    verticalHeight: settings?.clipboardVerticalHeight ?? null,
+    widthMode: settings?.clipboardWindowWidth ?? null,
+  });
 
   useEffect(() => {
     let disposed = false;
 
-    void invoke<Partial<AppSettings> | null>("load_app_settings")
-      .then((saved) => {
+    const loadSettings = async () => {
+      try {
+        const saved = await invoke<Partial<AppSettings> | null>("load_app_settings");
         if (disposed) return;
         const normalized = normalizeSavedSettings(saved);
         const fallback = Object.keys(normalized).length > 0 ? normalized : readLegacySavedSettings();
         setSettings({ ...fallbackSettings, ...fallback });
-      })
-      .catch(() => {
+      } catch {
         if (!disposed) {
           setSettings({ ...fallbackSettings, ...readLegacySavedSettings() });
         }
-      });
+      }
+    };
+
+    void loadSettings();
+    const unlistenPromise = listen("app-settings-changed", () => void loadSettings());
 
     return () => {
       disposed = true;
+      void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
@@ -96,12 +125,14 @@ export function ClipboardWindow() {
     return used;
   };
 
+  if (!settings) return null;
+
   const content =
     settings.clipboardLayout === "horizontal" ? (
       <ClipboardHorizontalView
         items={model.visibleItems}
         onDelete={model.deleteItem}
-        onTogglePinned={model.togglePinned}
+        onToggleFavorite={model.toggleFavorite}
         onUseItem={useItemAndClose}
         totalCount={model.history.length}
       />
@@ -109,7 +140,7 @@ export function ClipboardWindow() {
       <ClipboardVerticalView
         items={model.visibleItems}
         onDelete={model.deleteItem}
-        onTogglePinned={model.togglePinned}
+        onToggleFavorite={model.toggleFavorite}
         onUseItem={useItemAndClose}
         totalCount={model.history.length}
       />
@@ -117,7 +148,7 @@ export function ClipboardWindow() {
 
   return (
     <main
-      className={`ocr-result-window clipboard-window clipboard-layout-${settings.clipboardLayout}`}
+      className={`ocr-result-window clipboard-window clipboard-layout-${settings.clipboardLayout} clipboard-card-size-${settings.clipboardCardSize}`}
       onMouseDownCapture={closeWhenOutsideShell}
     >
       <section aria-label="剪贴板" className="ocr-result-shell clipboard-window-shell">
@@ -137,23 +168,27 @@ export function ClipboardWindow() {
             <span>{model.visibleItems.length} 条</span>
           </div>
           <div className="ocr-result-drag-spacer" />
-          <div className="clipboard-window-controls">
-            <AppButton disabled={model.busy} onClick={model.readCurrent} variant="text">
-              读取当前
-            </AppButton>
-          </div>
         </header>
 
         <div className="clipboard-window-body">
           <div className="clipboard-window-search">
-            <input
+            <Input
               onChange={(event) => model.setKeyword(event.target.value)}
               placeholder="搜索内容"
               value={model.keyword}
             />
-            <AppButton disabled={model.history.length === 0} onClick={model.clearHistory} variant="text">
-              清空
-            </AppButton>
+            {model.keyword && (
+              <Button
+                aria-label="清除搜索"
+                className="clipboard-search-clear"
+                onClick={() => model.setKeyword("")}
+                size="icon"
+                title="清除搜索"
+                variant="ghost"
+              >
+                <X />
+              </Button>
+            )}
           </div>
           <ClipboardFilterTabs
             counts={model.counts}

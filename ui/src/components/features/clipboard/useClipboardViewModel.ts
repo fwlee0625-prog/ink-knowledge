@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ClipboardHistoryItem, ClipboardTextResponse } from "../../../types";
+import type { ClipboardHistoryItem } from "../../../types";
 
-export type ClipboardKindFilter = "all" | "text" | "image" | "files";
+export type ClipboardKindFilter = "all" | "text" | "image" | "files" | "favorites";
 
 type ClipboardViewModelOptions = {
   onStatus?: (message: string) => void;
@@ -15,7 +15,6 @@ type UseClipboardItemOptions = {
 
 export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
   const { onStatus } = options;
-  const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<ClipboardHistoryItem[]>([]);
   const [keyword, setKeyword] = useState("");
   const [kindFilter, setKindFilter] = useState<ClipboardKindFilter>("all");
@@ -52,7 +51,8 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
   const visibleItems = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     return history.filter((item) => {
-      if (kindFilter !== "all" && item.kind !== kindFilter) return false;
+      if (kindFilter === "favorites" && !item.favorite) return false;
+      if (kindFilter !== "all" && kindFilter !== "favorites" && item.kind !== kindFilter) return false;
       if (!query) return true;
       if (item.text) return item.text.toLowerCase().includes(query);
       if (item.paths) return item.paths.some((path) => path.toLowerCase().includes(query));
@@ -61,8 +61,9 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
   }, [history, keyword, kindFilter]);
 
   const counts = useMemo(() => {
-    const nextCounts = { text: 0, image: 0, files: 0 };
+    const nextCounts = { text: 0, image: 0, files: 0, favorites: 0 };
     for (const item of history) {
+      if (item.favorite) nextCounts.favorites += 1;
       if (item.kind === "text") nextCounts.text += 1;
       else if (item.kind === "image") nextCounts.image += 1;
       else if (item.kind === "files") nextCounts.files += 1;
@@ -70,29 +71,11 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
     return nextCounts;
   }, [history]);
 
-  const readCurrent = useCallback(async () => {
-    setBusy(true);
-    try {
-      const response = await invoke<ClipboardTextResponse>("read_clipboard_text");
-      if (response.text.trim()) {
-        await invoke("write_clipboard_text", {
-          request: { text: response.text, source: "clipboard" },
-        });
-        await loadHistory();
-      }
-      notify(response.text.trim() ? "已读取当前剪贴板文本。" : "当前剪贴板没有文本。");
-    } catch (error) {
-      notify(`读取当前剪贴板失败: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [loadHistory, notify]);
-
   const clearHistory = useCallback(async () => {
     try {
       await invoke("clear_clipboard_history");
       await loadHistory();
-      notify("剪贴板历史已清空。");
+      notify("已清空未收藏的剪贴板记录。");
     } catch (error) {
       notify(`清空剪贴板历史失败: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -110,13 +93,13 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
     [notify],
   );
 
-  const togglePinned = useCallback(
-    async (id: string, pinned: boolean) => {
+  const toggleFavorite = useCallback(
+    async (id: string, favorite: boolean) => {
       try {
-        await invoke("set_clipboard_pinned", { id, pinned });
-        setHistory((current) => current.map((item) => (item.id === id ? { ...item, pinned } : item)));
+        await invoke("set_clipboard_favorite", { id, favorite });
+        setHistory((current) => current.map((item) => (item.id === id ? { ...item, favorite } : item)));
       } catch (error) {
-        notify(`更新置顶失败: ${error instanceof Error ? error.message : String(error)}`);
+        notify(`更新收藏失败: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
     [notify],
@@ -141,7 +124,6 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
   );
 
   return {
-    busy,
     clearHistory,
     counts,
     deleteItem,
@@ -149,10 +131,9 @@ export function useClipboardViewModel(options: ClipboardViewModelOptions = {}) {
     keyword,
     kindFilter,
     loadHistory,
-    readCurrent,
     setKeyword,
     setKindFilter,
-    togglePinned,
+    toggleFavorite,
     useItem,
     visibleItems,
   };

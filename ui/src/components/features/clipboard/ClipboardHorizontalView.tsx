@@ -1,11 +1,13 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { KeyboardEvent, MouseEvent, WheelEvent } from "react";
-import { AppButton, EmptyState } from "../../ui";
+import { EmptyState } from "../../ui";
 import type { ClipboardHistoryItem } from "../../../types";
+import { ClipboardRecordActions } from "./ClipboardRecordActions";
 import {
   baseName,
   createdLabel,
   kindLabel,
+  metaText,
 } from "./clipboardViewShared";
 
 type ClipboardHorizontalViewProps = {
@@ -13,7 +15,7 @@ type ClipboardHorizontalViewProps = {
   totalCount: number;
   onDelete: (id: string) => void;
   onAfterUse?: () => void;
-  onTogglePinned: (id: string, pinned: boolean) => Promise<void>;
+  onToggleFavorite: (id: string, favorite: boolean) => Promise<void>;
   onUseItem: (id: string) => Promise<boolean>;
 };
 
@@ -22,7 +24,7 @@ export function ClipboardHorizontalView({
   totalCount,
   onDelete,
   onAfterUse,
-  onTogglePinned,
+  onToggleFavorite,
   onUseItem,
 }: ClipboardHorizontalViewProps) {
   if (items.length === 0) {
@@ -69,7 +71,7 @@ export function ClipboardHorizontalView({
         <article
           aria-disabled={item.expired}
           className={`clipboard-shelf-card kind-${item.kind}${item.expired ? " is-expired" : ""}${
-            item.pinned ? " is-pinned" : ""
+            item.favorite ? " is-favorite" : ""
           }`}
           key={item.id}
           onClick={(event) => handleCardClick(event, item)}
@@ -85,14 +87,12 @@ export function ClipboardHorizontalView({
             <ClipboardCardPreview item={item} />
           </div>
           <footer className="clipboard-shelf-footer">
-            <div className="clipboard-shelf-actions">
-              <AppButton onClick={() => onTogglePinned(item.id, !item.pinned)} variant="text">
-                {item.pinned ? "取消" : "置顶"}
-              </AppButton>
-              <AppButton onClick={() => onDelete(item.id)} variant="text">
-                删除
-              </AppButton>
-            </div>
+            <span>{metaText(item)}</span>
+            <ClipboardRecordActions
+              favorite={item.favorite}
+              onDelete={() => onDelete(item.id)}
+              onToggleFavorite={() => void onToggleFavorite(item.id, !item.favorite)}
+            />
           </footer>
         </article>
       ))}

@@ -41,6 +41,9 @@ export const fallbackSettings: AppSettings = {
   clipboardHistoryLimit: 100,
   clipboardIgnoreSensitive: true,
   clipboardLayout: "horizontal",
+  clipboardWindowWidth: "default",
+  clipboardCardSize: "default",
+  clipboardVerticalHeight: "default",
   shortcutBindings: { ...defaultShortcutBindings },
 };
 
@@ -95,6 +98,27 @@ export function normalizeSavedSettings(value: Partial<AppSettings> | null | unde
   }
   if (saved.clipboardLayout !== "horizontal" && saved.clipboardLayout !== "vertical") {
     saved.clipboardLayout = "horizontal";
+  }
+  if (
+    saved.clipboardWindowWidth !== "half" &&
+    saved.clipboardWindowWidth !== "default" &&
+    saved.clipboardWindowWidth !== "full"
+  ) {
+    saved.clipboardWindowWidth = "default";
+  }
+  if (
+    saved.clipboardCardSize !== "small" &&
+    saved.clipboardCardSize !== "default" &&
+    saved.clipboardCardSize !== "large"
+  ) {
+    saved.clipboardCardSize = "default";
+  }
+  if (
+    saved.clipboardVerticalHeight !== "small" &&
+    saved.clipboardVerticalHeight !== "default" &&
+    saved.clipboardVerticalHeight !== "large"
+  ) {
+    saved.clipboardVerticalHeight = "default";
   }
   if (typeof saved.ocrResultAutoCloseOnBlur !== "boolean") {
     saved.ocrResultAutoCloseOnBlur = true;

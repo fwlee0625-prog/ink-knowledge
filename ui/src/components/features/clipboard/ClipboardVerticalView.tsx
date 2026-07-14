@@ -1,11 +1,11 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { AppButton, EmptyState } from "../../ui";
+import { EmptyState } from "../../ui";
 import type { ClipboardHistoryItem } from "../../../types";
+import { ClipboardRecordActions } from "./ClipboardRecordActions";
 import {
   baseName,
   createdLabel,
-  kindIcon,
   kindLabel,
   metaText,
 } from "./clipboardViewShared";
@@ -15,7 +15,7 @@ type ClipboardVerticalViewProps = {
   totalCount: number;
   onDelete: (id: string) => void;
   onAfterUse?: () => void;
-  onTogglePinned: (id: string, pinned: boolean) => Promise<void>;
+  onToggleFavorite: (id: string, favorite: boolean) => Promise<void>;
   onUseItem: (id: string) => Promise<boolean>;
 };
 
@@ -24,7 +24,7 @@ export function ClipboardVerticalView({
   totalCount,
   onDelete,
   onAfterUse,
-  onTogglePinned,
+  onToggleFavorite,
   onUseItem,
 }: ClipboardVerticalViewProps) {
   if (items.length === 0) {
@@ -65,16 +65,13 @@ export function ClipboardVerticalView({
         <li
           aria-disabled={item.expired}
           className={`clipboard-vertical-row kind-${item.kind}${item.expired ? " is-expired" : ""}${
-            item.pinned ? " is-pinned" : ""
+            item.favorite ? " is-favorite" : ""
           }`}
           key={item.id}
           onClick={(event) => handleRowClick(event, item)}
           onKeyDown={(event) => handleRowKeyDown(event, item)}
           tabIndex={item.expired ? -1 : 0}
         >
-          <span className="clipboard-kind-badge" data-kind={item.kind}>
-            {kindIcon(item.kind, item.is_dir)}
-          </span>
           <div className="clipboard-vertical-main">
             <div className="clipboard-vertical-head">
               <strong>{previewTitle(item)}</strong>
@@ -90,15 +87,11 @@ export function ClipboardVerticalView({
             </div>
           </div>
           <div className="clipboard-vertical-actions">
-            <AppButton disabled={item.expired} onClick={() => void useAndClose(item)} variant="text">
-              使用
-            </AppButton>
-            <AppButton onClick={() => onTogglePinned(item.id, !item.pinned)} variant="text">
-              {item.pinned ? "取消置顶" : "置顶"}
-            </AppButton>
-            <AppButton onClick={() => onDelete(item.id)} variant="text">
-              删除
-            </AppButton>
+            <ClipboardRecordActions
+              favorite={item.favorite}
+              onDelete={() => onDelete(item.id)}
+              onToggleFavorite={() => void onToggleFavorite(item.id, !item.favorite)}
+            />
           </div>
         </li>
       ))}

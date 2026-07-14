@@ -98,7 +98,7 @@ pub fn run() {
             commands::save_screenshot,
             commands::save_app_settings,
             commands::scan_supported_files,
-            commands::set_clipboard_pinned,
+            commands::set_clipboard_favorite,
             commands::set_clipboard_polling,
             commands::set_floating_window_auto_close,
             commands::start_native_capture,
