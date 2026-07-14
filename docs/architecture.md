@@ -6,6 +6,8 @@
 
 OCR 文件输入由 `OcrFileInputPanel` 承载，提供一个同时过滤图片与 PDF 的文件选择入口，以及独立的文件夹扫描入口；文件拖拽仍由 `useOcrFileDrop` 负责。
 
+用户可见的 OCR 引擎文案统一维护在 `ui/src/lib/ocrEngines.ts`。该映射将 `apple-vision` 展示为「极速识别」、`paddle` 展示为「深度识别」，不会改变前后端传递的引擎 ID 或识别逻辑。
+
 ```text
 Python package
   src/mac_local_ocr/

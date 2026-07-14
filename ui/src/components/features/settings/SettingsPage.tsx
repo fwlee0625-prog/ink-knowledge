@@ -50,6 +50,7 @@ import {
   ToggleGroupItem,
 } from "../../ui";
 import { clampNumber, formatBytes } from "../../../lib/format";
+import { getOcrEngineLabel, ocrEngineOptions, ocrEngineSettingsDescription } from "../../../lib/ocrEngines";
 import { ocrLanguageOptions } from "../../../lib/ocrLanguages";
 import { cn } from "../../../lib/utils";
 import { useAppUpdate } from "../../../lib/update";
@@ -94,10 +95,10 @@ type SettingsPageProps = {
 type SettingsUpdater = (current: AppSettings) => AppSettings;
 type Option<TValue extends string> = { icon?: ComponentType<LucideProps>; label: string; value: TValue };
 
-const engineOptions: Array<Option<OcrEngine>> = [
-  { icon: Cpu, label: "Apple Vision", value: "apple-vision" },
-  { icon: Package, label: "PaddleOCR 扩展", value: "paddle" },
-];
+const engineOptions: Array<Option<OcrEngine>> = ocrEngineOptions.map((option) => ({
+  ...option,
+  icon: option.value === "apple-vision" ? Cpu : Package,
+}));
 
 const themeOptions: Array<Option<ThemePreference>> = [
   { icon: Monitor, label: "跟随系统", value: "system" },
@@ -405,7 +406,7 @@ export function SettingsPage({
                       />
                     </div>
                   </SettingItem>
-                  <SettingItem description="Apple Vision 内置可用，PaddleOCR 需先安装扩展。" icon={Cpu} title="识别引擎">
+                  <SettingItem description={ocrEngineSettingsDescription} icon={Cpu} title="识别引擎">
                     <OptionToggleGroup
                       disabled={busy}
                       options={engineOptions}
@@ -938,7 +939,9 @@ export function SettingsPage({
                     <Card className="overflow-hidden" key={extension.id}>
                       <CardContent className="grid min-h-[88px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-6">
                         <div className="min-w-0">
-                          <strong className="text-sm font-medium text-foreground">{extension.name}</strong>
+                          <strong className="text-sm font-medium text-foreground">
+                            {getOcrEngineLabel(extension.id, extension.name)}
+                          </strong>
                           <span className="mt-1 block text-sm text-muted-foreground">
                             {extension.installed ? `版本 ${extension.version ?? "-"}` : extension.message}
                           </span>
@@ -949,7 +952,7 @@ export function SettingsPage({
                         {extension.installed ? (
                           <Button
                             disabled={busy}
-                            onClick={() => onUninstallExtension(extension.id, extension.name)}
+                            onClick={() => onUninstallExtension(extension.id, getOcrEngineLabel(extension.id, extension.name))}
                             variant="ghost"
                           >
                             卸载

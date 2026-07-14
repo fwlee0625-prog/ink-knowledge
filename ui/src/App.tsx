@@ -7,6 +7,7 @@ import { isSupportedOcrFilePath, ocrFileExtensions } from "./components/features
 import { SettingsPage } from "./components/features/settings/SettingsPage";
 import { useConfirmDialog } from "./components/ui";
 import { clampNumber, fileName, getOutputFormat, outputFileName, primaryOutputPath } from "./lib/format";
+import { getOcrEngineLabel } from "./lib/ocrEngines";
 import {
   clearLegacySavedSettings,
   fallbackSettings,
@@ -221,7 +222,7 @@ export function App({ initialView = "ocr" }: AppProps) {
         const nextStatus = await invoke<BackendStatus>("check_backend");
         setExtensions(nextExtensions);
         setStatus(nextStatus);
-        setLog(`已安装扩展: ${installed.name} ${installed.version ?? ""}`);
+        setLog(`已安装扩展: ${getOcrEngineLabel(installed.id, installed.name)} ${installed.version ?? ""}`);
       });
     } catch (error) {
       setLog(`安装扩展失败: ${error instanceof Error ? error.message : String(error)}`);

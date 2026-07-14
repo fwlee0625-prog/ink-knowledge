@@ -3,7 +3,8 @@ import { Check, File as GenericFileIcon, FileImage, Play, X } from "lucide-react
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AppButton, AppSelect, Card, EmptyState, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../ui";
 import { fileName, formatBytes, ocrButtonLabel } from "../../../lib/format";
-import type { AppSettings, FileInfo, OcrEngine, RecognitionFile, RecognitionProgress, ResultPreview } from "../../../types";
+import { ocrEngineOptions } from "../../../lib/ocrEngines";
+import type { AppSettings, FileInfo, RecognitionFile, RecognitionProgress, ResultPreview } from "../../../types";
 import { OcrFileInputPanel } from "./OcrFileInputPanel";
 import { getOcrFileKind, type OcrFileKind } from "./ocrFileSupport";
 
@@ -23,11 +24,6 @@ type OcrPageProps = {
 };
 
 type OutputFormat = "txt" | "json";
-
-const engineOptions: Array<{ label: string; value: OcrEngine }> = [
-  { label: "Apple Vision（推荐）", value: "apple-vision" },
-  { label: "PaddleOCR 扩展", value: "paddle" },
-];
 
 export function OcrPage({
   busy,
@@ -150,7 +146,7 @@ export function OcrPage({
                 className="ocr-engine-select"
                 disabled={busy}
                 onChange={(ocrEngine) => onUpdateSettings((current) => ({ ...current, ocrEngine }))}
-                options={engineOptions}
+                options={ocrEngineOptions}
                 value={settings.ocrEngine}
               />
             </div>

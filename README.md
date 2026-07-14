@@ -127,6 +127,8 @@ mac-local-ocr examples/ocr/sample_text.pdf -o output --force-ocr --dpi 300
 
 OCR 左侧输入面板提供「选择文件」和「文件夹」两个入口。「选择文件」的系统选择器可一次选择图片和 PDF；拖拽区同样支持这些格式。
 
+应用界面中的 OCR 引擎名称由 `ui/src/lib/ocrEngines.ts` 统一映射：内置 `apple-vision` 显示为「极速识别」，可选 `paddle` 显示为「深度识别」；内部识别请求仍使用原有引擎 ID。
+
 本项目已引入 Tauri 前端骨架，目标只支持 macOS。桌面版采用原生基础后端加可选扩展的思路：
 
 ```text
