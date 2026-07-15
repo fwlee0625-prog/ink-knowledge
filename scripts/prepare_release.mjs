@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const checkOnly = process.argv[2] === "--check";
-const requestedVersion = checkOnly ? undefined : process.argv[2];
+const argumentsWithoutNode = process.argv.slice(2).filter((argument) => argument !== "--");
+const checkOnly = argumentsWithoutNode[0] === "--check";
+const requestedVersion = checkOnly ? undefined : argumentsWithoutNode[0];
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 const paths = {
