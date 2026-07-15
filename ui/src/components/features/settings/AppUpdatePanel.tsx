@@ -16,13 +16,15 @@ import {
 
 type AppUpdatePanelProps = {
   manualError: string;
-  onCheckForUpdates: () => Promise<void>;
+  onCheckForUpdates: () => Promise<unknown>;
   status: AppUpdateStatus;
 };
 
 const changelog = [...(changelogData as ChangelogEntry[])].sort((left, right) =>
   right.version.localeCompare(left.version, undefined, { numeric: true }),
 );
+const updateAlertClassName =
+  "flex min-h-[88px] items-center gap-3 py-4 [&>svg]:static [&>svg]:shrink-0 [&>svg+div]:translate-y-0 [&>svg~*]:pl-0";
 
 export function AppUpdatePanel({ manualError, onCheckForUpdates, status }: AppUpdatePanelProps) {
   const checking = status.state === "checking";
@@ -31,7 +33,7 @@ export function AppUpdatePanel({ manualError, onCheckForUpdates, status }: AppUp
   const targetLabel = status.downloadUrl ? "下载 DMG" : "查看发布页";
 
   const openRelease = async () => {
-    if (!targetUrl || !isTrustedGitHubUrl(targetUrl)) return;
+    if (!targetUrl || !isTrustedUpdateUrl(targetUrl)) return;
     await openUrl(targetUrl);
   };
 
@@ -62,12 +64,12 @@ export function AppUpdatePanel({ manualError, onCheckForUpdates, status }: AppUp
         <Separator />
         <CardContent className="space-y-5 p-6">
           {manualError ? (
-            <Alert variant="destructive">
+            <Alert className={updateAlertClassName} variant="destructive">
               <Info />
               <AlertDescription>{manualError}</AlertDescription>
             </Alert>
           ) : updateAvailable ? (
-            <Alert>
+            <Alert className={updateAlertClassName}>
               <Info />
               <AlertDescription>
                 发现新版本 {status.latestVersion}
@@ -75,13 +77,13 @@ export function AppUpdatePanel({ manualError, onCheckForUpdates, status }: AppUp
               </AlertDescription>
             </Alert>
           ) : status.state === "up_to_date" ? (
-            <Alert>
+            <Alert className={updateAlertClassName}>
               <CheckCircle2 />
               <AlertDescription>当前已是最新版本。</AlertDescription>
             </Alert>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {checking ? "正在从 GitHub 获取最新正式版本。" : "尚未获取到最新版信息，可手动检查。"}
+              {checking ? "正在检查最新正式版本。" : "尚未获取到最新版信息，可手动检查。"}
             </p>
           )}
 
@@ -142,7 +144,7 @@ export function AppUpdatePanel({ manualError, onCheckForUpdates, status }: AppUp
   );
 }
 
-function isTrustedGitHubUrl(value: string) {
+function isTrustedUpdateUrl(value: string) {
   try {
     const url = new URL(value);
     return (

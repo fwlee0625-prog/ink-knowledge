@@ -183,35 +183,35 @@ fn fetch_latest_release(current_version: &str) -> Result<AppUpdateStatus, String
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if detail.is_empty() {
-            "连接 GitHub 失败。".to_string()
+            "连接更新服务失败。".to_string()
         } else {
-            format!("连接 GitHub 失败: {detail}")
+            format!("连接更新服务失败: {detail}")
         });
     }
     if output.stdout.len() > MAX_RESPONSE_BYTES + 4 {
-        return Err("GitHub Release 响应过大。".to_string());
+        return Err("更新信息响应过大。".to_string());
     }
 
     let separator = output
         .stdout
         .iter()
         .rposition(|byte| *byte == b'\n')
-        .ok_or_else(|| "GitHub API 没有返回 HTTP 状态。".to_string())?;
+        .ok_or_else(|| "更新服务没有返回有效状态。".to_string())?;
     let body = &output.stdout[..separator];
     let status_code = std::str::from_utf8(&output.stdout[separator + 1..])
         .ok()
         .and_then(|value| value.trim().parse::<u16>().ok())
-        .ok_or_else(|| "GitHub API 返回了无效 HTTP 状态。".to_string())?;
+        .ok_or_else(|| "更新服务返回了无效状态。".to_string())?;
     if !(200..300).contains(&status_code) {
         return Err(match status_code {
-            404 => "GitHub 仓库尚未发布正式 Release，或仓库配置不正确。".to_string(),
-            403 | 429 => "GitHub API 请求受限，请稍后再试。".to_string(),
-            _ => format!("GitHub API 返回 HTTP {status_code}。"),
+            404 => "暂未获取到可用的正式版本。".to_string(),
+            403 | 429 => "更新检查请求次数已达上限，请稍后重试。".to_string(),
+            _ => format!("更新服务返回异常状态（HTTP {status_code}）。"),
         });
     }
 
-    let release: GitHubRelease = serde_json::from_slice(body)
-        .map_err(|error| format!("解析 GitHub Release 失败: {error}"))?;
+    let release: GitHubRelease =
+        serde_json::from_slice(body).map_err(|error| format!("解析更新信息失败: {error}"))?;
     build_status(current_version, release)
 }
 
@@ -221,9 +221,9 @@ fn build_status(current_version: &str, release: GitHubRelease) -> Result<AppUpda
     let latest_text = release
         .tag_name
         .strip_prefix('v')
-        .ok_or_else(|| "GitHub Release 标签必须使用 vMAJOR.MINOR.PATCH 格式。".to_string())?;
+        .ok_or_else(|| "最新版本标识必须使用 vMAJOR.MINOR.PATCH 格式。".to_string())?;
     let latest = Version::parse(latest_text)
-        .map_err(|error| format!("GitHub Release 标签不符合 SemVer: {error}"))?;
+        .map_err(|error| format!("最新版本标识不符合版本规范: {error}"))?;
     if !latest.pre.is_empty() || !latest.build.is_empty() {
         return Err("正式更新标签必须使用 vMAJOR.MINOR.PATCH 格式。".to_string());
     }
@@ -266,9 +266,7 @@ fn github_repository() -> Result<String, String> {
         .map_err(|error| format!("解析 release/config.json 失败: {error}"))?;
     let repository = config.github_repository.trim();
     if repository.is_empty() {
-        return Err(
-            "尚未配置 GitHub 仓库，请填写 release/config.json 的 githubRepository。".to_string(),
-        );
+        return Err("更新服务尚未完成配置。".to_string());
     }
     validate_repository(repository)?;
     Ok(repository.to_string())
@@ -285,13 +283,13 @@ fn validate_repository(repository: &str) -> Result<(), String> {
             })
     };
     if !valid_part(owner) || !valid_part(name) || parts.next().is_some() {
-        return Err("GitHub 仓库配置必须使用 owner/repo 格式。".to_string());
+        return Err("更新服务配置格式无效。".to_string());
     }
     Ok(())
 }
 
 fn validate_github_url(value: &str) -> Result<String, String> {
-    let url = Url::parse(value).map_err(|_| "GitHub Release 返回了无效链接。".to_string())?;
+    let url = Url::parse(value).map_err(|_| "更新信息包含无效链接。".to_string())?;
     let allowed_host = matches!(
         url.host_str(),
         Some("github.com")
@@ -299,7 +297,7 @@ fn validate_github_url(value: &str) -> Result<String, String> {
             | Some("release-assets.githubusercontent.com")
     );
     if url.scheme() != "https" || !allowed_host {
-        return Err("GitHub Release 返回了不受信任的下载链接。".to_string());
+        return Err("更新下载链接不受信任。".to_string());
     }
     Ok(url.to_string())
 }

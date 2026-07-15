@@ -22,7 +22,7 @@ export function useAppUpdate() {
     };
   }, []);
 
-  const checkForUpdates = useCallback(async () => {
+  const checkForUpdates = useCallback(async (): Promise<AppUpdateStatus> => {
     setManualError("");
     setStatus((current) => ({ ...current, state: "checking", error: undefined }));
     try {
@@ -31,12 +31,19 @@ export function useAppUpdate() {
       if (nextStatus.state === "error") {
         setManualError(nextStatus.error || "检查更新失败，请稍后再试。");
       }
+      return nextStatus;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const nextStatus: AppUpdateStatus = {
+        state: "error",
+        currentVersion: status.currentVersion,
+        error: message,
+      };
       setManualError(message);
       setStatus((current) => ({ ...current, state: "error", error: message }));
+      return nextStatus;
     }
-  }, []);
+  }, [status.currentVersion]);
 
   return { checkForUpdates, manualError, status };
 }

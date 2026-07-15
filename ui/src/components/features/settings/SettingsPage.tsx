@@ -48,6 +48,7 @@ import {
   Switch,
   ToggleGroup,
   ToggleGroupItem,
+  useMessage,
 } from "../../ui";
 import { clampNumber, formatBytes } from "../../../lib/format";
 import { getOcrEngineLabel, ocrEngineOptions, ocrEngineSettingsDescription } from "../../../lib/ocrEngines";
@@ -176,6 +177,7 @@ export function SettingsPage({
   const [cacheSelectionMode, setCacheSelectionMode] = useState(false);
   const [selectedCacheIds, setSelectedCacheIds] = useState<string[]>([]);
   const { checkForUpdates, manualError: updateManualError, status: updateStatus } = useAppUpdate();
+  const message = useMessage();
   const draftSettingsRef = useRef(settings);
   const activeMeta = sections.find((section) => section.id === activeSection) ?? sections[0];
 
@@ -209,6 +211,17 @@ export function SettingsPage({
 
   const saveDraftSettings = () => {
     onPersistSettings(draftSettingsRef.current, true);
+  };
+
+  const checkUpdatesFromSidebar = async () => {
+    const result = await checkForUpdates();
+    if (result.state === "up_to_date") {
+      message.success("当前已是最新版本");
+    } else if (result.state === "update_available") {
+      message.info("请在关于中进行升级");
+    } else if (result.state === "error") {
+      message.error(result.error || "检查更新失败，请稍后再试。");
+    }
   };
 
   const loadStorageUsage = async (preserveMessage = false) => {
@@ -314,7 +327,7 @@ export function SettingsPage({
               <Button
                 className="h-8 px-2"
                 disabled={updateStatus.state === "checking"}
-                onClick={() => void checkForUpdates()}
+                onClick={() => void checkUpdatesFromSidebar()}
                 variant={updateStatus.state === "update_available" ? "outline" : "ghost"}
               >
                 <RefreshCw className={updateStatus.state === "checking" ? "animate-spin" : undefined} />
