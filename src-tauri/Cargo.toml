@@ -1,6 +1,6 @@
 [package]
 name = "mac-local-ocr-app"
-version = "0.1.0"
+version = "0.1.1"
 description = "墨识 OCR desktop app"
 edition = "2021"
 
